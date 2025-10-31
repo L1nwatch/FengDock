@@ -12,7 +12,6 @@ const nodeTemplate = document.getElementById("json-node-template");
 
 const STRING_CUTOFF = 120;
 const AUTO_PREVIEW_DELAY_MS = 350;
-const VERSION_TOKEN = document.lastModified.replace(/[^0-9]/g, "") || `${Date.now()}`;
 const SAMPLE_JSON = {
   name: "FengDock",
   version: "0.1.0",
@@ -248,14 +247,5 @@ function closeModal() {
 // Initialize preview
 resetPreview();
 if (footerVersion) {
-  footerVersion.textContent = `build: ${VERSION_TOKEN}`;
-}
-
-const cssLink = document.querySelector('link[href*="static/tools/json-viewer/style.css"]');
-if (cssLink) {
-  const url = new URL(cssLink.href, window.location.origin);
-  if (!url.searchParams.has('v')) {
-    url.searchParams.set('v', VERSION_TOKEN);
-    cssLink.href = url.toString();
-  }
+  footerVersion.textContent = `build: ${document.lastModified}`;
 }
