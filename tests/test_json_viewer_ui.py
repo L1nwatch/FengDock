@@ -62,17 +62,17 @@ def test_json_viewer_modal_hidden_and_render(page):
 
     sample_data = '{"message": "hello", "items": [1, 2]}'
     page.fill("#json-input", sample_data)
-    page.click("#format-btn")
-    page.wait_for_timeout(200)
+    page.wait_for_function(
+        """() => { const tree = document.querySelector('#preview-tree'); return tree && tree.textContent.includes('"message"'); }"""
+    )
 
     tree_text = page.inner_text("#preview-tree")
     assert "message" in tree_text and "items" in tree_text
 
-    page.fill("#json-input", sample_data.replace("hello", "".ljust(200, "x")))
-    page.click("#format-btn")
-    page.wait_for_timeout(200)
+    page.fill("#json-input", sample_data.replace("hello", "x" * 220))
+    page.wait_for_selector(".json-node__expand")
 
-    page.click(".json-node__expand")
+    page.locator(".json-node__expand").first.click()
     modal_visible = page.eval_on_selector("#modal", "el => !el.hasAttribute('hidden')")
     assert modal_visible, "Modal should open after clicking expand"
 

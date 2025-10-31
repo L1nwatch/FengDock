@@ -11,6 +11,7 @@ const modalContent = document.getElementById("modal-content");
 const nodeTemplate = document.getElementById("json-node-template");
 
 const STRING_CUTOFF = 120;
+const AUTO_PREVIEW_DELAY_MS = 350;
 const SAMPLE_JSON = {
   name: "FengDock",
   version: "0.1.0",
@@ -27,35 +28,36 @@ const SAMPLE_JSON = {
   lastUpdated: new Date().toISOString(),
 };
 
+let autoPreviewTimerId = null;
+
 formatBtn.addEventListener("click", () => {
-  const raw = textarea.value.trim();
-  if (!raw) {
-    showError("请输入 JSON 字符串");
-    return;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    const sorted = sortKeysToggle.checked ? sortJson(parsed) : parsed;
-    textarea.value = JSON.stringify(sorted, null, 2);
-    renderTree(sorted);
-    hideError();
-  } catch (err) {
-    console.error(err);
-    showError("解析失败：" + err.message);
-  }
+  clearTimeout(autoPreviewTimerId);
+  updatePreview({ normalizeTextarea: true });
 });
 
 clearBtn.addEventListener("click", () => {
   textarea.value = "";
-  previewTree.replaceChildren(createEmptyPlaceholder());
+  clearTimeout(autoPreviewTimerId);
+  resetPreview();
   hideError();
   textarea.focus();
 });
 
 sampleBtn.addEventListener("click", () => {
   textarea.value = JSON.stringify(SAMPLE_JSON, null, 2);
-  renderTree(SAMPLE_JSON);
-  hideError();
+  clearTimeout(autoPreviewTimerId);
+  updatePreview();
+});
+
+textarea.addEventListener("input", () => {
+  schedulePreview();
+});
+
+sortKeysToggle.addEventListener("change", () => {
+  clearTimeout(autoPreviewTimerId);
+  if (textarea.value.trim()) {
+    updatePreview();
+  }
 });
 
 previewTree.addEventListener("click", (event) => {
@@ -107,6 +109,41 @@ function renderTree(data) {
   const root = createNode(undefined, data);
   fragment.appendChild(root);
   previewTree.replaceChildren(fragment);
+}
+
+function resetPreview() {
+  previewTree.replaceChildren(createEmptyPlaceholder());
+}
+
+function schedulePreview() {
+  clearTimeout(autoPreviewTimerId);
+  if (!textarea.value.trim()) {
+    resetPreview();
+    hideError();
+    return;
+  }
+  autoPreviewTimerId = setTimeout(() => updatePreview(), AUTO_PREVIEW_DELAY_MS);
+}
+
+function updatePreview({ normalizeTextarea = false } = {}) {
+  const raw = textarea.value;
+  if (!raw.trim()) {
+    resetPreview();
+    hideError();
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const processed = sortKeysToggle.checked ? sortJson(parsed) : parsed;
+    renderTree(processed);
+    hideError();
+    if (normalizeTextarea) {
+      textarea.value = JSON.stringify(processed, null, 2);
+    }
+  } catch (err) {
+    showError("解析失败：" + err.message);
+  }
 }
 
 function createNode(key, value) {
@@ -171,7 +208,7 @@ function createNode(key, value) {
       const expandBtn = document.createElement("button");
       expandBtn.type = "button";
       expandBtn.className = "json-node__expand";
-      expandBtn.dataset.fullValue = value;
+      expandBtn.dataset.fullValue = fullText;
       expandBtn.textContent = "展开";
       node.appendChild(expandBtn);
     } else {
@@ -203,7 +240,7 @@ function sortJson(input) {
 
 function createEmptyPlaceholder() {
   const placeholder = document.createElement("p");
-  placeholder.textContent = "在左侧输入 JSON 并点击格式化查看预览";
+  placeholder.textContent = "在左侧输入 JSON 即可自动预览";
   placeholder.style.color = "rgba(255,255,255,0.6)";
   placeholder.style.margin = "16px 0";
   return placeholder;
@@ -229,4 +266,4 @@ function closeModal() {
 }
 
 // Initialize preview
-previewTree.appendChild(createEmptyPlaceholder());
+resetPreview();
