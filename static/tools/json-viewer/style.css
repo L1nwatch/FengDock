@@ -227,19 +227,9 @@ body {
 .fd-footer {
   margin: 24px clamp(16px, 4vw, 48px);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.fd-footer__home {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.fd-footer__home:hover {
-  color: var(--accent);
 }
 
 .fd-footer__version {
