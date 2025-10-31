@@ -67,7 +67,7 @@ body {
 
 .fd-input__textarea {
   width: 100%;
-  min-height: 320px;
+  min-height: 300px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--panel-light);
@@ -76,6 +76,7 @@ body {
   font-size: 0.95rem;
   line-height: 1.5;
   resize: vertical;
+  box-sizing: border-box;
 }
 
 .fd-input__textarea:focus {
@@ -286,7 +287,7 @@ body {
   }
 
   .fd-preview__tree {
-    max-height: 420px;
+    max-height: 400px;
   }
 }
 
