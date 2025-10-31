@@ -156,37 +156,41 @@ function createNode(key, value) {
     separatorEl.hidden = true;
   }
 
-  if (value === null) {
+ if (value === null) {
     valueEl.textContent = "null";
     valueEl.classList.add("json-node__value--null");
   } else if (Array.isArray(value)) {
     const count = value.length;
     valueEl.textContent = `Array(${count})`;
-    toggleBtn.hidden = false;
-    toggleBtn.textContent = "−";
-    toggleBtn.setAttribute("aria-expanded", "true");
-    const children = document.createElement("div");
-    children.className = "json-node__children";
-    value.forEach((item, index) => {
-      const child = createNode(index, item);
-      children.appendChild(child);
-    });
-    wrapper.append(node, children);
-    return wrapper;
+    if (count > 0) {
+      toggleBtn.hidden = false;
+      toggleBtn.textContent = "−";
+      toggleBtn.setAttribute("aria-expanded", "true");
+      const children = document.createElement("div");
+      children.className = "json-node__children";
+      value.forEach((item, index) => {
+        const child = createNode(index, item);
+        children.appendChild(child);
+      });
+      wrapper.append(node, children);
+      return wrapper;
+    }
   } else if (typeof value === "object") {
     const entries = Object.entries(value);
     valueEl.textContent = `Object(${entries.length})`;
-    toggleBtn.hidden = false;
-    toggleBtn.textContent = "−";
-    toggleBtn.setAttribute("aria-expanded", "true");
-    const children = document.createElement("div");
-    children.className = "json-node__children";
-    entries.forEach(([childKey, childValue]) => {
-      const child = createNode(childKey, childValue);
-      children.appendChild(child);
-    });
-    wrapper.append(node, children);
-    return wrapper;
+    if (entries.length > 0) {
+      toggleBtn.hidden = false;
+      toggleBtn.textContent = "−";
+      toggleBtn.setAttribute("aria-expanded", "true");
+      const children = document.createElement("div");
+      children.className = "json-node__children";
+      entries.forEach(([childKey, childValue]) => {
+        const child = createNode(childKey, childValue);
+        children.appendChild(child);
+      });
+      wrapper.append(node, children);
+      return wrapper;
+    }
   } else if (typeof value === "number") {
     valueEl.textContent = String(value);
     valueEl.classList.add("json-node__value--number");
