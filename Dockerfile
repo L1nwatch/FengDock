@@ -35,6 +35,9 @@ COPY --from=builder /app/.venv ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 COPY app ./app
+COPY index.html ./index.html
+COPY static ./static
+COPY tools ./tools
 COPY pyproject.toml uv.lock ./
 
 EXPOSE 8000
