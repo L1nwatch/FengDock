@@ -90,3 +90,56 @@ def bulk_update_status(
         link.mark_checked(status)
         session.add(link)
     session.commit()
+
+
+def list_loblaws_watches(session: Session) -> List[models.LoblawsWatch]:
+    statement = select(models.LoblawsWatch).order_by(models.LoblawsWatch.id)
+    return list(session.scalars(statement))
+
+
+def get_loblaws_watch(session: Session, watch_id: int) -> Optional[models.LoblawsWatch]:
+    return session.get(models.LoblawsWatch, watch_id)
+
+
+def get_loblaws_watch_by_url(session: Session, url: str) -> Optional[models.LoblawsWatch]:
+    normalized = str(url).strip()
+    statement = (
+        select(models.LoblawsWatch)
+        .where(models.LoblawsWatch.url == normalized)
+        .limit(1)
+    )
+    return session.scalars(statement).first()
+
+
+def create_loblaws_watch(
+    session: Session, payload: schemas.LoblawsWatchCreate, product_code: str
+) -> models.LoblawsWatch:
+    normalized_url = str(payload.url).strip()
+    watch = models.LoblawsWatch(
+        url=normalized_url,
+        product_code=product_code,
+        store_id=payload.store_id,
+        label=payload.label,
+    )
+    session.add(watch)
+    session.commit()
+    session.refresh(watch)
+    return watch
+
+
+def update_loblaws_watch(
+    session: Session,
+    watch: models.LoblawsWatch,
+    payload: schemas.LoblawsWatchUpdate,
+) -> models.LoblawsWatch:
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(watch, field, value)
+    session.add(watch)
+    session.commit()
+    session.refresh(watch)
+    return watch
+
+
+def delete_loblaws_watch(session: Session, watch: models.LoblawsWatch) -> None:
+    session.delete(watch)
+    session.commit()

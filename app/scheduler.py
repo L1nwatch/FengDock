@@ -11,12 +11,14 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from . import crud
+from .loblaws import refresh_all_watches
 from .database import session_scope
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="UTC")
 CHECK_INTERVAL_MINUTES = int(os.getenv("LINK_CHECK_INTERVAL_MINUTES", "30"))
+LOBLAWS_INTERVAL_MINUTES = int(os.getenv("LOBLAWS_REFRESH_INTERVAL_MINUTES", "60"))
 
 
 async def _fetch_active_links() -> List[Tuple[int, str]]:
@@ -62,15 +64,36 @@ async def run_link_health_check() -> None:
     logger.info("Health check updated %d links", len(updates))
 
 
+async def run_loblaws_refresh_job() -> None:
+    updated = await refresh_all_watches()
+    if updated:
+        logger.info("Loblaws refresh updated %d products", len(updated))
+    else:
+        logger.debug("Loblaws refresh found no products to update")
+
+
 def configure_jobs() -> None:
     if scheduler.get_job("link_health_check"):
-        return
+        scheduler.remove_job("link_health_check")
 
     scheduler.add_job(
         run_link_health_check,
         "interval",
         minutes=CHECK_INTERVAL_MINUTES,
         id="link_health_check",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+
+    if scheduler.get_job("loblaws_refresh"):
+        scheduler.remove_job("loblaws_refresh")
+
+    scheduler.add_job(
+        run_loblaws_refresh_job,
+        "interval",
+        minutes=LOBLAWS_INTERVAL_MINUTES,
+        id="loblaws_refresh",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

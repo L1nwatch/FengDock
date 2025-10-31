@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
-from .routers import links
+from .routers import links, loblaws
 from .scheduler import run_link_health_check, shutdown_scheduler, start_scheduler
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ FRONTEND_ROOT = Path(__file__).resolve().parent.parent
 INDEX_FILE = FRONTEND_ROOT / "index.html"
 TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
+BOARD_FILE = TOOLS_DIR / "loblaws-board.html"
 
 
 def create_app() -> FastAPI:
@@ -58,6 +59,13 @@ def create_app() -> FastAPI:
         except FileNotFoundError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(status_code=404, detail="JSON viewer not available") from exc
 
+    @app.get("/board", response_class=HTMLResponse, include_in_schema=False)
+    async def loblaws_board() -> str:
+        try:
+            return BOARD_FILE.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+            raise HTTPException(status_code=404, detail="Board not available") from exc
+
     @app.head("/tools/json-viewer", include_in_schema=False)
     async def json_viewer_head() -> Response:
         return Response(status_code=200)
@@ -67,6 +75,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(links.router)
+    app.include_router(loblaws.router)
 
     return app
 

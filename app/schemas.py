@@ -71,3 +71,61 @@ class LinkClickPayload(BaseModel):
         if not value:
             raise ValueError("url cannot be empty")
         return value
+
+
+class LoblawsWatchBase(BaseModel):
+    url: HttpUrl
+    label: Optional[str] = None
+    store_id: str = "1032"
+
+    @field_validator("label")
+    @classmethod
+    def normalize_label(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class LoblawsWatchCreate(LoblawsWatchBase):
+    pass
+
+
+class LoblawsWatchUpdate(BaseModel):
+    label: Optional[str] = None
+    store_id: Optional[str] = None
+
+    @field_validator("label")
+    @classmethod
+    def normalize_label(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class LoblawsWatchRead(BaseModel):
+    id: int
+    url: str
+    product_code: str
+    store_id: str
+    label: Optional[str]
+    name: Optional[str]
+    brand: Optional[str]
+    image_url: Optional[str]
+    current_price: Optional[float]
+    price_unit: Optional[str]
+    regular_price: Optional[float]
+    sale_text: Optional[str]
+    sale_expiry: Optional[datetime]
+    sale_type: Optional[str]
+    sale_badge_name: Optional[str]
+    stock_status: Optional[str]
+    last_checked_at: Optional[datetime]
+    last_change_at: Optional[datetime]
+    last_notified_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
