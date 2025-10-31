@@ -12,7 +12,10 @@
 
     handle {
         root * /srv/www
-        @json_viewer path "/tools/json-viewer"
+        @json_viewer {
+            path "/tools/json-viewer"
+            path "/tools/json-viewer/"
+        }
         rewrite @json_viewer /tools/json-viewer.html
         try_files {path} /index.html
         file_server
