@@ -33,7 +33,9 @@ jobs:
         run: uv sync --group dev
 
       - name: Run pytest
-        run: uv run pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: uv run python -m pytest
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
