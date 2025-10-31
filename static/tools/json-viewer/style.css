@@ -224,6 +224,28 @@ body {
   padding-left: 16px;
 }
 
+.fd-footer {
+  margin: 24px clamp(16px, 4vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.fd-footer__home {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.fd-footer__home:hover {
+  color: var(--accent);
+}
+
+.fd-footer__version {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .fd-modal {
   position: fixed;
   inset: 0;
