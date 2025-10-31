@@ -33,8 +33,10 @@ SQLite files are stored in `data/` (ignored by git). Background jobs run automat
    - `DOMAIN=your.domain` (must match the Cloudflare DNS record)
    - Optional: `CADDY_GLOBAL_OPTIONS="email you@example.com"`
 2. Ensure `docker`, `docker compose`, and `git` are installed on the VPS and the repo is cloned in `${DEPLOY_PATH}`.
-3. GitHub Actions workflow `.github/workflows/deploy.yml` builds and pushes the image, then SSHs to the VPS and runs:
+3. GitHub Actions workflow `.github/workflows/deploy.yml` builds and pushes the image, then SSHs to the VPS, syncs the git repo, and runs:
    ```bash
+   git fetch --all --prune
+   git reset --hard origin/main
    docker compose pull
    docker compose up -d --remove-orphans
    docker image prune -f
