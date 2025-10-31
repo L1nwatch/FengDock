@@ -10,6 +10,16 @@
         reverse_proxy backend:8000
     }
 
+    @board path "/board"
+    handle @board {
+        reverse_proxy backend:8000
+    }
+
+    @board_slash path "/board/"
+    handle @board_slash {
+        reverse_proxy backend:8000
+    }
+
     handle {
         root * /srv/www
         @json_viewer path "/tools/json-viewer"
