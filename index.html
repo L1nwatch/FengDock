@@ -240,15 +240,6 @@
             <div class="description">JSONKit</div>
         </div>
     </a>
-    <a class="periodic-element social-media"
-       data-description="Gitbooks"
-       href="https://app.gitbook.com/@l1nwatch"
-       target="_blank">
-        <div class="periodic-element-inner">
-            <div class="title"><i class="icon-book-open icons"></i></div>
-            <div class="description">GitBook</div>
-        </div>
-    </a>
     <a class="periodic-element intense-work"
        data-description="西部数码, Domain DNS management"
        href="https://www.west.cn/" target="_blank">
@@ -291,5 +282,84 @@
     <a href="http://watch0.top" target="_blank"><i class="icon-social-dribbble icons"></i></a>
 </footer>
 <!-- partial -->
+<script>
+(() => {
+  const table = document.querySelector('.periodic-table');
+  if (!table) return;
+
+  const STORAGE_KEY = 'fengdock:linkClicks';
+  const MAX_ITEMS = 48; // adjust to change visible card count
+
+  let storeEnabled = true;
+  let clickStats = {};
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    clickStats = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    storeEnabled = false;
+    clickStats = {};
+  }
+
+  const cards = Array.from(table.querySelectorAll('.periodic-element'));
+  if (!cards.length) return;
+
+  const ranked = cards.map((card, index) => {
+    const key = card.dataset.key || card.getAttribute('href') || `card-${index}`;
+    card.dataset.key = key;
+    const stats = clickStats[key] || {};
+    return {
+      card,
+      key,
+      count: Number(stats.count) || 0,
+      lastClick: Number(stats.lastClick) || 0,
+      originalIndex: index,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.lastClick !== a.lastClick) return b.lastClick - a.lastClick;
+    return a.originalIndex - b.originalIndex;
+  });
+
+  const fragment = document.createDocumentFragment();
+  ranked.slice(0, Math.min(MAX_ITEMS, ranked.length)).forEach((item) => {
+    fragment.appendChild(item.card);
+  });
+
+  table.innerHTML = '';
+  table.appendChild(fragment);
+
+  if (!storeEnabled) return;
+
+  table.addEventListener(
+    'click',
+    (event) => {
+      const anchor = event.target.closest('.periodic-element');
+      if (!anchor) return;
+      const key = anchor.dataset.key;
+      if (!key) return;
+      let payload = {};
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        payload = raw ? JSON.parse(raw) : {};
+      } catch (err) {
+        payload = {};
+      }
+      const entry = payload[key] || { count: 0 };
+      entry.count = Number(entry.count) + 1;
+      entry.lastClick = Date.now();
+      payload[key] = entry;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (err) {
+        storeEnabled = false;
+      }
+    },
+    { capture: true }
+  );
+})();
+</script>
 </body>
 </html>
