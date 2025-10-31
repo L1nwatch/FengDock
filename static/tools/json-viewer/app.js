@@ -175,6 +175,7 @@ function createNode(key, value) {
       wrapper.append(node, children);
       return wrapper;
     }
+    toggleBtn.hidden = true;
   } else if (typeof value === "object") {
     const entries = Object.entries(value);
     valueEl.textContent = `Object(${entries.length})`;
@@ -191,6 +192,7 @@ function createNode(key, value) {
       wrapper.append(node, children);
       return wrapper;
     }
+    toggleBtn.hidden = true;
   } else if (typeof value === "number") {
     valueEl.textContent = String(value);
     valueEl.classList.add("json-node__value--number");
