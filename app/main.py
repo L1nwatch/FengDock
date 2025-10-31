@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -57,6 +57,10 @@ def create_app() -> FastAPI:
             return json_viewer_file.read_text(encoding="utf-8")
         except FileNotFoundError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(status_code=404, detail="JSON viewer not available") from exc
+
+    @app.head("/tools/json-viewer", include_in_schema=False)
+    async def json_viewer_head() -> Response:
+        return Response(status_code=200)
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:

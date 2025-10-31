@@ -114,13 +114,15 @@ function createNode(key, value) {
   const node = nodeTemplate.content.firstElementChild.cloneNode(true);
   const keyEl = node.querySelector(".json-node__key");
   const valueEl = node.querySelector(".json-node__value");
+  const separatorEl = node.querySelector(".json-node__separator");
   const toggleBtn = node.querySelector(".json-node__toggle");
 
   if (typeof key !== "undefined") {
     keyEl.textContent = JSON.stringify(String(key));
   } else {
-    keyEl.textContent = "root";
+    keyEl.textContent = "(root)";
     keyEl.style.color = "rgba(255,255,255,0.5)";
+    separatorEl.hidden = true;
   }
 
   if (value === null) {
@@ -169,7 +171,7 @@ function createNode(key, value) {
       const expandBtn = document.createElement("button");
       expandBtn.type = "button";
       expandBtn.className = "json-node__expand";
-      expandBtn.dataset.fullValue = fullText;
+      expandBtn.dataset.fullValue = value;
       expandBtn.textContent = "展开";
       node.appendChild(expandBtn);
     } else {
