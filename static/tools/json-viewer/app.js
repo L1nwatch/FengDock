@@ -147,6 +147,7 @@ function createNode(key, value) {
   const valueEl = node.querySelector(".json-node__value");
   const separatorEl = node.querySelector(".json-node__separator");
   const toggleBtn = node.querySelector(".json-node__toggle");
+  const isRoot = typeof key === "undefined";
 
   if (typeof key !== "undefined") {
     keyEl.textContent = JSON.stringify(String(key));
@@ -154,6 +155,7 @@ function createNode(key, value) {
     keyEl.textContent = "(root)";
     keyEl.style.color = "rgba(255,255,255,0.5)";
     separatorEl.hidden = true;
+    toggleBtn.hidden = true;
   }
 
  if (value === null) {
@@ -163,9 +165,13 @@ function createNode(key, value) {
     const count = value.length;
     valueEl.textContent = `Array(${count})`;
     if (count > 0) {
-      toggleBtn.hidden = false;
-      toggleBtn.textContent = "−";
-      toggleBtn.setAttribute("aria-expanded", "true");
+      if (!isRoot) {
+        toggleBtn.hidden = false;
+        toggleBtn.textContent = "−";
+        toggleBtn.setAttribute("aria-expanded", "true");
+      } else {
+        toggleBtn.hidden = true;
+      }
       const children = document.createElement("div");
       children.className = "json-node__children";
       value.forEach((item, index) => {
@@ -180,9 +186,13 @@ function createNode(key, value) {
     const entries = Object.entries(value);
     valueEl.textContent = `Object(${entries.length})`;
     if (entries.length > 0) {
-      toggleBtn.hidden = false;
-      toggleBtn.textContent = "−";
-      toggleBtn.setAttribute("aria-expanded", "true");
+      if (!isRoot) {
+        toggleBtn.hidden = false;
+        toggleBtn.textContent = "−";
+        toggleBtn.setAttribute("aria-expanded", "true");
+      } else {
+        toggleBtn.hidden = true;
+      }
       const children = document.createElement("div");
       children.className = "json-node__children";
       entries.forEach(([childKey, childValue]) => {
