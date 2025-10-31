@@ -128,7 +128,7 @@ body {
 
 .fd-preview__header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 12px;
 }
@@ -136,14 +136,6 @@ body {
 .fd-preview__header h2 {
   margin: 0;
   font-size: 1.1rem;
-}
-
-.fd-preview__option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  color: var(--muted);
 }
 
 .fd-preview__tree {

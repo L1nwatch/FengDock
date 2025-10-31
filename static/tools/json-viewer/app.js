@@ -4,7 +4,6 @@ const formatBtn = document.getElementById("format-btn");
 const clearBtn = document.getElementById("clear-btn");
 const sampleBtn = document.getElementById("sample-btn");
 const errorMessage = document.getElementById("error-message");
-const sortKeysToggle = document.getElementById("sort-keys");
 const modal = document.getElementById("modal");
 const modalClose = modal.querySelector(".fd-modal__close");
 const modalContent = document.getElementById("modal-content");
@@ -32,7 +31,7 @@ let autoPreviewTimerId = null;
 
 formatBtn.addEventListener("click", () => {
   clearTimeout(autoPreviewTimerId);
-  updatePreview({ normalizeTextarea: true });
+  updatePreview({ normalizeTextarea: true, showErrorOnEmpty: true });
 });
 
 clearBtn.addEventListener("click", () => {
@@ -49,16 +48,7 @@ sampleBtn.addEventListener("click", () => {
   updatePreview();
 });
 
-textarea.addEventListener("input", () => {
-  schedulePreview();
-});
-
-sortKeysToggle.addEventListener("change", () => {
-  clearTimeout(autoPreviewTimerId);
-  if (textarea.value.trim()) {
-    updatePreview();
-  }
-});
+textarea.addEventListener("input", schedulePreview);
 
 previewTree.addEventListener("click", (event) => {
   const toggle = event.target.closest(".json-node__toggle");
@@ -125,21 +115,24 @@ function schedulePreview() {
   autoPreviewTimerId = setTimeout(() => updatePreview(), AUTO_PREVIEW_DELAY_MS);
 }
 
-function updatePreview({ normalizeTextarea = false } = {}) {
+function updatePreview({ normalizeTextarea = false, showErrorOnEmpty = false } = {}) {
   const raw = textarea.value;
   if (!raw.trim()) {
     resetPreview();
-    hideError();
+    if (showErrorOnEmpty) {
+      showError("请输入 JSON 字符串");
+    } else {
+      hideError();
+    }
     return;
   }
 
   try {
     const parsed = JSON.parse(raw);
-    const processed = sortKeysToggle.checked ? sortJson(parsed) : parsed;
-    renderTree(processed);
+    renderTree(parsed);
     hideError();
     if (normalizeTextarea) {
-      textarea.value = JSON.stringify(processed, null, 2);
+      textarea.value = JSON.stringify(parsed, null, 2);
     }
   } catch (err) {
     showError("解析失败：" + err.message);
@@ -221,21 +214,6 @@ function createNode(key, value) {
 
   wrapper.appendChild(node);
   return wrapper;
-}
-
-function sortJson(input) {
-  if (Array.isArray(input)) {
-    return input.map(sortJson);
-  }
-  if (input && typeof input === "object") {
-    return Object.keys(input)
-      .sort((a, b) => a.localeCompare(b, "zh-Hans-CN"))
-      .reduce((acc, key) => {
-        acc[key] = sortJson(input[key]);
-        return acc;
-      }, {});
-  }
-  return input;
 }
 
 function createEmptyPlaceholder() {
