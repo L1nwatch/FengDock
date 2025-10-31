@@ -19,6 +19,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY app ./app
+COPY index.html ./index.html
+COPY static ./static
+COPY tools ./tools
 
 FROM python:3.12-slim AS runtime
 
