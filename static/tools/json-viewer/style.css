@@ -241,6 +241,10 @@ body {
   backdrop-filter: blur(3px);
 }
 
+.fd-modal[hidden] {
+  display: none !important;
+}
+
 .fd-modal__dialog {
   background: var(--panel);
   border-radius: 12px;

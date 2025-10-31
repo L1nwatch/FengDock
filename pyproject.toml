@@ -12,9 +12,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "playwright>=1.55.0",
     "pytest>=8.4.2",
+    "pytest-playwright>=0.7.1",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end browser tests",
+]
