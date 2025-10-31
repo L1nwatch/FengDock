@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Iterable, List, Optional
 
 from sqlalchemy import select
@@ -10,16 +11,43 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 
 
-def list_links(session: Session, *, include_inactive: bool = False) -> List[models.Link]:
+def list_links(
+    session: Session,
+    *,
+    include_inactive: bool = False,
+    ordering: str = "order",
+    limit: Optional[int] = None,
+) -> List[models.Link]:
     statement = select(models.Link)
     if not include_inactive:
         statement = statement.where(models.Link.is_active.is_(True))
-    statement = statement.order_by(models.Link.order_index, models.Link.id)
+    if ordering == "clicks":
+        statement = statement.order_by(
+            models.Link.click_count.desc(),
+            models.Link.last_clicked_at.desc(),
+            models.Link.order_index,
+            models.Link.id,
+        )
+    else:
+        statement = statement.order_by(models.Link.order_index, models.Link.id)
+    if limit is not None:
+        statement = statement.limit(limit)
     return list(session.scalars(statement))
 
 
 def get_link(session: Session, link_id: int) -> Optional[models.Link]:
     return session.get(models.Link, link_id)
+
+
+def get_link_by_url(session: Session, url: str) -> Optional[models.Link]:
+    normalized = url.strip()
+    candidates = {normalized}
+    if normalized.endswith("/"):
+        candidates.add(normalized.rstrip("/"))
+    else:
+        candidates.add(f"{normalized}/")
+    statement = select(models.Link).where(models.Link.url.in_(candidates))
+    return session.scalars(statement).first()
 
 
 def create_link(session: Session, payload: schemas.LinkCreate) -> models.Link:
@@ -41,6 +69,13 @@ def update_link(session: Session, link: models.Link, payload: schemas.LinkUpdate
 
 def delete_link(session: Session, link: models.Link) -> None:
     session.delete(link)
+    session.commit()
+
+
+def record_link_click(session: Session, link: models.Link) -> None:
+    link.click_count = (link.click_count or 0) + 1
+    link.last_clicked_at = datetime.now(timezone.utc)
+    session.add(link)
     session.commit()
 
 

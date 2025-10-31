@@ -287,75 +287,72 @@
   const table = document.querySelector('.periodic-table');
   if (!table) return;
 
-  const STORAGE_KEY = 'fengdock:linkClicks';
-  const MAX_ITEMS = 48; // adjust to change visible card count
-
-  let storeEnabled = true;
-  let clickStats = {};
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    clickStats = raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    storeEnabled = false;
-    clickStats = {};
-  }
-
+  const MAX_ITEMS = 48;
   const cards = Array.from(table.querySelectorAll('.periodic-element'));
   if (!cards.length) return;
 
-  const ranked = cards.map((card, index) => {
-    const key = card.dataset.key || card.getAttribute('href') || `card-${index}`;
-    card.dataset.key = key;
-    const stats = clickStats[key] || {};
-    return {
-      card,
-      key,
-      count: Number(stats.count) || 0,
-      lastClick: Number(stats.lastClick) || 0,
-      originalIndex: index,
-    };
+  cards.forEach((card, index) => {
+    card.dataset.originalIndex = String(index);
+    try {
+      card.dataset.linkUrl = new URL(card.getAttribute('href') || '', window.location.origin).href;
+    } catch (err) {
+      card.dataset.linkUrl = card.getAttribute('href') || '';
+    }
   });
 
-  ranked.sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    if (b.lastClick !== a.lastClick) return b.lastClick - a.lastClick;
-    return a.originalIndex - b.originalIndex;
-  });
+  const applyOrdering = (links) => {
+    if (!Array.isArray(links) || !links.length) return;
+    const rankMap = new Map();
 
-  const fragment = document.createDocumentFragment();
-  ranked.slice(0, Math.min(MAX_ITEMS, ranked.length)).forEach((item) => {
-    fragment.appendChild(item.card);
-  });
+    links.forEach((link, index) => {
+      if (!link || !link.url) return;
+      let normalized;
+      try {
+        normalized = new URL(link.url, window.location.origin).href;
+      } catch (err) {
+        normalized = link.url;
+      }
+      rankMap.set(normalized, {
+        index,
+        count: Number(link.click_count ?? 0),
+        lastClick: link.last_clicked_at ? Date.parse(link.last_clicked_at) || 0 : 0,
+      });
+    });
 
-  table.innerHTML = '';
-  table.appendChild(fragment);
+    const sortedCards = cards.slice().sort((a, b) => {
+      const statsA = rankMap.get(a.dataset.linkUrl);
+      const statsB = rankMap.get(b.dataset.linkUrl);
+      if (statsA && statsB) {
+        if (statsB.count !== statsA.count) return statsB.count - statsA.count;
+        if (statsB.lastClick !== statsA.lastClick) return statsB.lastClick - statsA.lastClick;
+        return statsA.index - statsB.index;
+      }
+      if (statsA) return -1;
+      if (statsB) return 1;
+      return Number(a.dataset.originalIndex) - Number(b.dataset.originalIndex);
+    });
 
-  if (!storeEnabled) return;
+    const limited = sortedCards.slice(0, Math.min(MAX_ITEMS, sortedCards.length));
+    table.innerHTML = '';
+    limited.forEach((card) => table.appendChild(card));
+  };
+
+  fetch(`/links/?ordering=clicks&limit=${MAX_ITEMS}`)
+    .then((response) => (response.ok ? response.json() : []))
+    .then(applyOrdering)
+    .catch(() => {});
 
   table.addEventListener(
     'click',
     (event) => {
-      const anchor = event.target.closest('.periodic-element');
-      if (!anchor) return;
-      const key = anchor.dataset.key;
-      if (!key) return;
-      let payload = {};
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        payload = raw ? JSON.parse(raw) : {};
-      } catch (err) {
-        payload = {};
-      }
-      const entry = payload[key] || { count: 0 };
-      entry.count = Number(entry.count) + 1;
-      entry.lastClick = Date.now();
-      payload[key] = entry;
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      } catch (err) {
-        storeEnabled = false;
-      }
+      const card = event.target.closest('.periodic-element');
+      if (!card || !card.dataset.linkUrl) return;
+      fetch('/links/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: card.dataset.linkUrl }),
+        keepalive: true,
+      }).catch(() => {});
     },
     { capture: true }
   );

@@ -45,14 +45,29 @@ class LinkUpdate(BaseModel):
     color_class: Optional[str] = None
     order_index: Optional[int] = None
     is_active: Optional[bool] = None
+    click_count: Optional[int] = None
 
 
 class LinkRead(LinkBase):
     id: int
     status: str
     last_checked_at: Optional[datetime] = None
+    click_count: int
+    last_clicked_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class LinkClickPayload(BaseModel):
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def strip_url(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("url cannot be empty")
+        return value

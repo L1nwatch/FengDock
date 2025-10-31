@@ -25,6 +25,8 @@ class Link(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     status = Column(String(20), nullable=False, default="unknown")
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    click_count = Column(Integer, nullable=False, default=0)
+    last_clicked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),
