@@ -1,0 +1,7 @@
+Old_blog_source/
+old_blog_source/
+.venv/
+__pycache__/
+data/
+.DS_Store
+*.sqlite3

@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+old_blog_source
+data
+*.sqlite3
+docker-compose.yml
+docker-compose.dev.yml
+deploy

@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: .
+    image: fengdock-backend:dev
+    ports:
+      - "8000:8000"
+
+  caddy:
+    environment:
+      DOMAIN: localhost
+      CADDY_GLOBAL_OPTIONS: ""
+    ports:
+      - "8080:80"
+      - "8443:443"

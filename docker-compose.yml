@@ -1,0 +1,39 @@
+services:
+  backend:
+    image: ${GHCR_IMAGE}
+    restart: unless-stopped
+    environment:
+      LINK_CHECK_INTERVAL_MINUTES: ${LINK_CHECK_INTERVAL_MINUTES:-30}
+    volumes:
+      - backend_db:/app/data
+    networks:
+      - fengdock
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      DOMAIN: ${DOMAIN}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./index.html:/srv/www/index.html:ro
+      - ./static:/srv/www/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - fengdock
+
+volumes:
+  backend_db:
+  caddy_data:
+  caddy_config:
+
+networks:
+  fengdock:
+    driver: bridge

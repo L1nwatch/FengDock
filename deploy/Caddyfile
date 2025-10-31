@@ -1,0 +1,26 @@
+{
+    {$CADDY_GLOBAL_OPTIONS}
+    admin off
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+
+    handle_path /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        root * /srv/www
+        try_files {path} /index.html
+        file_server
+    }
+
+    @healthz path "/proxy-health"
+    respond @healthz 200
+
+    log {
+        output stdout
+        format console
+    }
+}
