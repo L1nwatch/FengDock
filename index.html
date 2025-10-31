@@ -339,7 +339,7 @@
     limited.forEach((card) => table.appendChild(card));
   };
 
-  fetch(`/links/?ordering=clicks&limit=${MAX_ITEMS}`)
+  fetch(`/api/links/?ordering=clicks&limit=${MAX_ITEMS}`)
     .then((response) => (response.ok ? response.json() : []))
     .then(applyOrdering)
     .catch(() => {});
@@ -349,7 +349,7 @@
     (event) => {
       const card = event.target.closest('.periodic-element');
       if (!card || !card.dataset.linkUrl) return;
-      fetch('/links/click', {
+      fetch('/api/links/click', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: card.dataset.linkUrl }),
