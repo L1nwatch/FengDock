@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
 
 FRONTEND_ROOT = Path(__file__).resolve().parent.parent
 INDEX_FILE = FRONTEND_ROOT / "index.html"
+TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
 
 
@@ -48,6 +49,14 @@ def create_app() -> FastAPI:
             return INDEX_FILE.read_text(encoding="utf-8")
         except FileNotFoundError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(status_code=404, detail="Homepage not configured") from exc
+
+    @app.get("/tools/json-viewer", response_class=HTMLResponse, include_in_schema=False)
+    async def json_viewer() -> str:
+        json_viewer_file = TOOLS_DIR / "json-viewer.html"
+        try:
+            return json_viewer_file.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+            raise HTTPException(status_code=404, detail="JSON viewer not available") from exc
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FengDock JSON 预览</title>
+    <link rel="stylesheet" href="/static/articles/Poppins.css">
+    <link rel="stylesheet" href="/static/homepage/reset.min.css">
+    <link rel="stylesheet" href="/static/tools/json-viewer/style.css">
+    <link rel="shortcut icon" href="/static/favicon.ico">
+</head>
+<body>
+<header class="fd-header">
+    <a class="fd-header__home" href="/">← 返回 FengDock</a>
+    <h1 class="fd-header__title">JSON 预览工具</h1>
+</header>
+<main class="fd-container">
+    <section class="fd-input">
+        <label for="json-input" class="fd-input__label">输入 JSON</label>
+        <textarea id="json-input" class="fd-input__textarea" placeholder='{"example": true}'></textarea>
+        <div class="fd-input__actions">
+            <button id="format-btn" type="button">格式化并预览</button>
+            <button id="clear-btn" type="button">清空</button>
+            <button id="sample-btn" type="button">加载示例</button>
+        </div>
+        <p id="error-message" class="fd-input__error" role="alert" hidden></p>
+    </section>
+    <section class="fd-preview" aria-live="polite">
+        <header class="fd-preview__header">
+            <h2>预览</h2>
+            <label class="fd-preview__option">
+                <input type="checkbox" id="sort-keys" checked>
+                <span>键名排序</span>
+            </label>
+        </header>
+        <div id="preview-tree" class="fd-preview__tree" tabindex="0"></div>
+    </section>
+</main>
+<template id="json-node-template">
+    <div class="json-node" data-collapsible>
+        <button class="json-node__toggle" type="button" aria-label="切换展开" hidden></button>
+        <span class="json-node__key"></span>
+        <span class="json-node__separator">: </span>
+        <span class="json-node__value"></span>
+    </div>
+</template>
+<div id="modal" class="fd-modal" hidden>
+    <div class="fd-modal__dialog" role="dialog" aria-modal="true">
+        <button class="fd-modal__close" type="button" aria-label="关闭">×</button>
+        <pre id="modal-content"></pre>
+    </div>
+</div>
+<script src="/static/tools/json-viewer/app.js" type="module"></script>
+</body>
+</html>

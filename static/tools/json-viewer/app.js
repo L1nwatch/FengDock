@@ -1,0 +1,230 @@
+const textarea = document.getElementById("json-input");
+const previewTree = document.getElementById("preview-tree");
+const formatBtn = document.getElementById("format-btn");
+const clearBtn = document.getElementById("clear-btn");
+const sampleBtn = document.getElementById("sample-btn");
+const errorMessage = document.getElementById("error-message");
+const sortKeysToggle = document.getElementById("sort-keys");
+const modal = document.getElementById("modal");
+const modalClose = modal.querySelector(".fd-modal__close");
+const modalContent = document.getElementById("modal-content");
+const nodeTemplate = document.getElementById("json-node-template");
+
+const STRING_CUTOFF = 120;
+const SAMPLE_JSON = {
+  name: "FengDock",
+  version: "0.1.0",
+  description: "A personal portal with scheduled link checks and handy utilities.",
+  features: ["Static homepage", "FastAPI backend", "SQLite data store", "Scheduler"],
+  maintainer: {
+    handle: "L1nwatch",
+    languages: ["Python", "TypeScript"],
+    socials: {
+      github: "https://github.com/L1nwatch",
+      site: "https://watch0.top",
+    },
+  },
+  lastUpdated: new Date().toISOString(),
+};
+
+formatBtn.addEventListener("click", () => {
+  const raw = textarea.value.trim();
+  if (!raw) {
+    showError("请输入 JSON 字符串");
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const sorted = sortKeysToggle.checked ? sortJson(parsed) : parsed;
+    textarea.value = JSON.stringify(sorted, null, 2);
+    renderTree(sorted);
+    hideError();
+  } catch (err) {
+    console.error(err);
+    showError("解析失败：" + err.message);
+  }
+});
+
+clearBtn.addEventListener("click", () => {
+  textarea.value = "";
+  previewTree.replaceChildren(createEmptyPlaceholder());
+  hideError();
+  textarea.focus();
+});
+
+sampleBtn.addEventListener("click", () => {
+  textarea.value = JSON.stringify(SAMPLE_JSON, null, 2);
+  renderTree(SAMPLE_JSON);
+  hideError();
+});
+
+previewTree.addEventListener("click", (event) => {
+  const toggle = event.target.closest(".json-node__toggle");
+  if (toggle) {
+    const node = toggle.closest(".json-node");
+    const children = node.nextElementSibling;
+    if (children && children.classList.contains("json-node__children")) {
+      const collapsed = children.hidden;
+      children.hidden = !collapsed;
+      toggle.textContent = collapsed ? "−" : "+";
+      toggle.setAttribute("aria-expanded", String(collapsed));
+    }
+    return;
+  }
+
+  const expand = event.target.closest(".json-node__expand");
+  if (expand) {
+    const { fullValue } = expand.dataset;
+    if (fullValue) {
+      openModal(fullValue);
+    }
+  }
+});
+
+previewTree.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const toggle = event.target.closest(".json-node__toggle");
+  if (toggle) {
+    event.preventDefault();
+    toggle.click();
+  }
+});
+
+modal.addEventListener("click", (event) => {
+  if (event.target === modal || event.target === modalClose) {
+    closeModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !modal.hidden) {
+    closeModal();
+  }
+});
+
+function renderTree(data) {
+  const fragment = document.createDocumentFragment();
+  const root = createNode(undefined, data);
+  fragment.appendChild(root);
+  previewTree.replaceChildren(fragment);
+}
+
+function createNode(key, value) {
+  const wrapper = document.createDocumentFragment();
+  const node = nodeTemplate.content.firstElementChild.cloneNode(true);
+  const keyEl = node.querySelector(".json-node__key");
+  const valueEl = node.querySelector(".json-node__value");
+  const toggleBtn = node.querySelector(".json-node__toggle");
+
+  if (typeof key !== "undefined") {
+    keyEl.textContent = JSON.stringify(String(key));
+  } else {
+    keyEl.textContent = "root";
+    keyEl.style.color = "rgba(255,255,255,0.5)";
+  }
+
+  if (value === null) {
+    valueEl.textContent = "null";
+    valueEl.classList.add("json-node__value--null");
+  } else if (Array.isArray(value)) {
+    const count = value.length;
+    valueEl.textContent = `Array(${count})`;
+    toggleBtn.hidden = false;
+    toggleBtn.textContent = "−";
+    toggleBtn.setAttribute("aria-expanded", "true");
+    const children = document.createElement("div");
+    children.className = "json-node__children";
+    value.forEach((item, index) => {
+      const child = createNode(index, item);
+      children.appendChild(child);
+    });
+    wrapper.append(node, children);
+    return wrapper;
+  } else if (typeof value === "object") {
+    const entries = Object.entries(value);
+    valueEl.textContent = `Object(${entries.length})`;
+    toggleBtn.hidden = false;
+    toggleBtn.textContent = "−";
+    toggleBtn.setAttribute("aria-expanded", "true");
+    const children = document.createElement("div");
+    children.className = "json-node__children";
+    entries.forEach(([childKey, childValue]) => {
+      const child = createNode(childKey, childValue);
+      children.appendChild(child);
+    });
+    wrapper.append(node, children);
+    return wrapper;
+  } else if (typeof value === "number") {
+    valueEl.textContent = String(value);
+    valueEl.classList.add("json-node__value--number");
+  } else if (typeof value === "boolean") {
+    valueEl.textContent = String(value);
+    valueEl.classList.add("json-node__value--boolean");
+  } else if (typeof value === "string") {
+    const fullText = JSON.stringify(value);
+    if (value.length > STRING_CUTOFF) {
+      valueEl.textContent = JSON.stringify(value.slice(0, STRING_CUTOFF)) + "…";
+      valueEl.dataset.collapsed = "true";
+      valueEl.classList.add("json-node__value--string");
+      const expandBtn = document.createElement("button");
+      expandBtn.type = "button";
+      expandBtn.className = "json-node__expand";
+      expandBtn.dataset.fullValue = fullText;
+      expandBtn.textContent = "展开";
+      node.appendChild(expandBtn);
+    } else {
+      valueEl.textContent = fullText;
+      valueEl.classList.add("json-node__value--string");
+    }
+  } else {
+    valueEl.textContent = JSON.stringify(value);
+  }
+
+  wrapper.appendChild(node);
+  return wrapper;
+}
+
+function sortJson(input) {
+  if (Array.isArray(input)) {
+    return input.map(sortJson);
+  }
+  if (input && typeof input === "object") {
+    return Object.keys(input)
+      .sort((a, b) => a.localeCompare(b, "zh-Hans-CN"))
+      .reduce((acc, key) => {
+        acc[key] = sortJson(input[key]);
+        return acc;
+      }, {});
+  }
+  return input;
+}
+
+function createEmptyPlaceholder() {
+  const placeholder = document.createElement("p");
+  placeholder.textContent = "在左侧输入 JSON 并点击格式化查看预览";
+  placeholder.style.color = "rgba(255,255,255,0.6)";
+  placeholder.style.margin = "16px 0";
+  return placeholder;
+}
+
+function showError(message) {
+  errorMessage.textContent = message;
+  errorMessage.hidden = false;
+}
+
+function hideError() {
+  errorMessage.hidden = true;
+}
+
+function openModal(text) {
+  modal.hidden = false;
+  modalContent.textContent = text;
+}
+
+function closeModal() {
+  modal.hidden = true;
+  modalContent.textContent = "";
+}
+
+// Initialize preview
+previewTree.appendChild(createEmptyPlaceholder());
