@@ -34,12 +34,29 @@ async function sha256Hex(value) {
   return Math.abs(hash).toString(16);
 }
 
+function mapSaleType(type) {
+  if (!type) return null;
+  const upper = String(type).toUpperCase();
+  const mappings = {
+    SPECIAL: '促销中',
+    CLEARANCE: '清仓特价',
+    DEAL: '优惠中',
+    SALE: '促销中',
+  };
+  return mappings[upper] || (upper !== 'REGULAR' ? '促销中' : null);
+}
+
+function getSaleLabel(item) {
+  if (!item) return null;
+  if (item.sale_text && item.sale_text.trim()) return item.sale_text.trim();
+  if (item.sale_badge_name && String(item.sale_badge_name).trim()) {
+    return String(item.sale_badge_name).trim();
+  }
+  return mapSaleType(item.sale_type);
+}
+
 function hasActiveSale(item) {
-  if (!item) return false;
-  if (item.sale_text && item.sale_text.trim()) return true;
-  if (item.sale_badge_name && String(item.sale_badge_name).trim()) return true;
-  if (item.sale_type && String(item.sale_type).toUpperCase() !== 'REGULAR') return true;
-  return false;
+  return Boolean(getSaleLabel(item));
 }
 
 function toTimestamp(value) {
@@ -117,8 +134,10 @@ function renderWatchCard(watch) {
   priceEl.textContent = formatCurrency(watch.current_price, watch.price_unit);
   wasEl.textContent = formatCurrency(watch.regular_price, watch.price_unit);
 
-  if (watch.sale_text) {
-    saleEl.textContent = watch.sale_text;
+  const saleLabel = getSaleLabel(watch);
+
+  if (saleLabel) {
+    saleEl.textContent = saleLabel;
     saleEl.classList.remove('watch-card__sale--inactive');
     saleEl.classList.add('watch-card__sale--active');
   } else {
