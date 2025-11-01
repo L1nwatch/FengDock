@@ -10,7 +10,8 @@
         reverse_proxy backend:8000
     }
 
-    handle_path /loblaws/* {
+    @loblaws path /loblaws/*
+    handle @loblaws {
         reverse_proxy backend:8000
     }
 
