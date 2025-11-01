@@ -16,6 +16,8 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8123
 BASE_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 SAMPLE_WATCH_URL = "https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA?source=nspt"
+GITHUB_URL = "https://github.com/L1nwatch"
+NOTION_URL = "https://watch0.notion.site/"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -98,6 +100,35 @@ def _seed_loblaws_watch() -> None:
         )
 
 
+def _seed_links_for_home() -> None:
+    with session_scope() as session:
+        session.query(models.Link).delete()
+        session.add_all(
+            [
+                models.Link(
+                    title="GitHub",
+                    description="",
+                    url=GITHUB_URL,
+                    category="intense-work",
+                    color_class="intense-work",
+                    order_index=0,
+                    click_count=150,
+                    last_clicked_at=datetime(2025, 11, 1, tzinfo=timezone.utc),
+                ),
+                models.Link(
+                    title="Notion",
+                    description="",
+                    url=NOTION_URL,
+                    category="intense-work",
+                    color_class="intense-work",
+                    order_index=1,
+                    click_count=10,
+                    last_clicked_at=datetime(2025, 10, 20, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+
+
 @pytest.mark.e2e
 def test_json_viewer_modal_hidden_and_render(page):
     page.goto(f"{BASE_URL}/tools/json-viewer", wait_until="networkidle")
@@ -162,3 +193,26 @@ def test_loblaws_board_and_manage_views(page):
     with session_scope() as session:
         session.query(models.LoblawsWatch).delete()
     os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
+
+
+@pytest.mark.e2e
+def test_homepage_click_ordering(page):
+    _seed_links_for_home()
+
+    page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+    page.wait_for_selector('.periodic-table .periodic-element')
+    page.wait_for_timeout(1000)
+
+    titles = page.locator('.periodic-table .periodic-element .description').all_inner_texts()
+    if not (titles and titles[0] == 'GitHub'):
+        hrefs = page.evaluate(
+            "Array.from(document.querySelectorAll('.periodic-table .periodic-element')).map(el => el.getAttribute('href'))"
+        )
+        link_urls = page.evaluate(
+            "Array.from(document.querySelectorAll('.periodic-table .periodic-element')).map(el => el.dataset.linkUrl)"
+        )
+        pytest.fail(f"Unexpected homepage order: {titles[:5]}, hrefs: {hrefs[:5]}, data: {link_urls[:5]}")
+    assert titles[1] == 'Notion'
+
+    with session_scope() as session:
+        session.query(models.Link).delete()

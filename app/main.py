@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(links.router)
+    app.include_router(links.router, prefix="/api")
     app.include_router(loblaws.router)
 
     return app
