@@ -33,6 +33,17 @@ async function sha256Hex(value) {
   return Math.abs(hash).toString(16);
 }
 
+function hasActiveSale(item) {
+  return Boolean(item && item.sale_text && item.sale_text.trim());
+}
+
+function toTimestamp(value) {
+  if (!value) return 0;
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -169,7 +180,22 @@ function renderWatchCard(watch) {
 async function loadList() {
   try {
     const data = await fetchJson('/loblaws/watches');
-    listCache = Array.isArray(data) ? data : [];
+    listCache = Array.isArray(data) ? [...data] : [];
+    listCache.sort((a, b) => {
+      const dealA = hasActiveSale(a) ? 1 : 0;
+      const dealB = hasActiveSale(b) ? 1 : 0;
+      if (dealA !== dealB) return dealB - dealA;
+
+      if (dealA && dealB) {
+        const expA = toTimestamp(a && a.sale_expiry);
+        const expB = toTimestamp(b && b.sale_expiry);
+        if (expA !== expB) return expA - expB;
+      }
+
+      const updatedA = toTimestamp(a && a.last_checked_at);
+      const updatedB = toTimestamp(b && b.last_checked_at);
+      return updatedB - updatedA;
+    });
     renderEmptyState(listCache.length > 0);
     clearList();
     listCache.forEach((item) => {
