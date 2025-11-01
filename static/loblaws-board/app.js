@@ -34,7 +34,11 @@ async function sha256Hex(value) {
 }
 
 function hasActiveSale(item) {
-  return Boolean(item && item.sale_text && item.sale_text.trim());
+  if (!item) return false;
+  if (item.sale_text && item.sale_text.trim()) return true;
+  if (item.sale_badge_name && String(item.sale_badge_name).trim()) return true;
+  if (item.sale_type && String(item.sale_type).toUpperCase() !== 'REGULAR') return true;
+  return false;
 }
 
 function toTimestamp(value) {
