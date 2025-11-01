@@ -15,12 +15,12 @@
         reverse_proxy backend:8000
     }
 
-    @board path "/board"
+    @board path "/board" "/board/manage"
     handle @board {
         reverse_proxy backend:8000
     }
 
-    @board_slash path "/board/"
+    @board_slash path "/board/" "/board/manage/"
     handle @board_slash {
         reverse_proxy backend:8000
     }

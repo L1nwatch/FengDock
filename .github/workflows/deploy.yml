@@ -77,7 +77,12 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            PASSWORD="${{ secrets.PRIVATE_PAGE_PASSWORD }}"
             set -euo pipefail
+            if [ -n "$PASSWORD" ]; then
+              HASH=$(printf '%s' "$PASSWORD" | sha256sum | awk '{print $1}')
+              export PRIVATE_PAGE_PASSWORD_HASH="$HASH"
+            fi
             cd ${{ secrets.DEPLOY_PATH }}
             git fetch --all --prune
             git reset --hard origin/main

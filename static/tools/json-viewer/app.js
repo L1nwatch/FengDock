@@ -4,7 +4,6 @@ const formatBtn = document.getElementById("format-btn");
 const clearBtn = document.getElementById("clear-btn");
 const sampleBtn = document.getElementById("sample-btn");
 const errorMessage = document.getElementById("error-message");
-const footerVersion = document.getElementById("fd-version");
 const modal = document.getElementById("modal");
 const modalClose = modal.querySelector(".fd-modal__close");
 const modalContent = document.getElementById("modal-content");
@@ -262,6 +261,3 @@ function closeModal() {
 
 // Initialize preview
 resetPreview();
-if (footerVersion) {
-  footerVersion.textContent = `build: ${document.lastModified}`;
-}

@@ -1,15 +1,21 @@
+import hashlib
+import os
 import threading
 import time
+from datetime import datetime, timezone
 
 import pytest
 import uvicorn
 from playwright.sync_api import sync_playwright
 
 from app.main import app
+from app.database import session_scope
+from app import models
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8123
 BASE_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
+SAMPLE_WATCH_URL = "https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA?source=nspt"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -50,6 +56,30 @@ def page(browser_context):
     page.close()
 
 
+def _seed_loblaws_watch() -> None:
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        session.query(models.LoblawsWatch).delete()
+        session.add(
+            models.LoblawsWatch(
+                url=SAMPLE_WATCH_URL,
+                product_code="20077874001_EA",
+                store_id="1032",
+                name="Natrel Lactose Free 2%",
+                brand="Natrel",
+                image_url="https://example.com/sample.png",
+                current_price=6.75,
+                price_unit="ea",
+                regular_price=7.14,
+                sale_text="SAVE $0.39",
+                sale_expiry=datetime(2025, 12, 3, tzinfo=timezone.utc),
+                stock_status="IN_STOCK",
+                last_checked_at=now,
+                last_change_at=now,
+            )
+        )
+
+
 @pytest.mark.e2e
 def test_json_viewer_modal_hidden_and_render(page):
     page.goto(f"{BASE_URL}/tools/json-viewer", wait_until="networkidle")
@@ -82,3 +112,32 @@ def test_json_viewer_modal_hidden_and_render(page):
     page.click(".fd-modal__close")
     is_hidden_again = page.eval_on_selector("#modal", "el => el.hasAttribute('hidden')")
     assert is_hidden_again
+
+
+@pytest.mark.e2e
+def test_loblaws_board_and_manage_views(page):
+    os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
+    _seed_loblaws_watch()
+
+    page.goto(f"{BASE_URL}/board", wait_until="load")
+    page.wait_for_selector(".watch-card__title")
+
+    titles = page.locator(".watch-card__title").all_inner_texts()
+    assert any("Natrel" in title for title in titles)
+
+    assert page.locator(".board-header__manage").is_visible()
+    assert page.locator(".watch-card__action--delete").count() == 0
+
+    hash_value = hashlib.sha256(b"secret").hexdigest()
+    os.environ["PRIVATE_PAGE_PASSWORD_HASH"] = hash_value
+
+    page.goto(f"{BASE_URL}/board/manage?token={hash_value}", wait_until="load")
+    page.wait_for_selector("#watch-form")
+
+    assert page.locator("#watch-form").is_visible()
+    assert page.locator(".watch-card__action--delete").count() >= 1
+    assert page.locator(".watch-card__title").first.inner_text() != ""
+
+    with session_scope() as session:
+        session.query(models.LoblawsWatch).delete()
+    os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)

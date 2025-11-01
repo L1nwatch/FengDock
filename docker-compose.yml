@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     environment:
       LINK_CHECK_INTERVAL_MINUTES: ${LINK_CHECK_INTERVAL_MINUTES:-30}
+      PRIVATE_PAGE_PASSWORD_HASH: ${PRIVATE_PAGE_PASSWORD_HASH:-}
     volumes:
       - backend_db:/app/data
     networks:

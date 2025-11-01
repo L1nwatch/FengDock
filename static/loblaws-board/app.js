@@ -3,9 +3,9 @@ const emptyStateEl = document.getElementById('watch-empty');
 const template = document.getElementById('watch-card-template');
 const form = document.getElementById('watch-form');
 const urlInput = document.getElementById('watch-url');
-const labelInput = document.getElementById('watch-label');
 const formFeedback = document.getElementById('form-feedback');
 const refreshAllBtn = document.getElementById('refresh-all');
+const manageLink = document.querySelector('.board-header__manage');
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', {
   style: 'currency',
@@ -15,6 +15,23 @@ const currencyFormatter = new Intl.NumberFormat('en-CA', {
 
 let listCache = [];
 let loadingAll = false;
+
+async function sha256Hex(value) {
+  if (window.crypto && window.crypto.subtle) {
+    const data = new TextEncoder().encode(value);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(digest));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Simple fallback hash for browsers without SubtleCrypto support
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(16);
+}
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -131,17 +148,20 @@ function renderWatchCard(watch) {
     }
   });
 
-  node.querySelector('.watch-card__action--delete').addEventListener('click', async () => {
-    const confirmed = window.confirm('确定要删除这个监控吗？');
-    if (!confirmed) return;
-    try {
-      await fetchJson(`/loblaws/watches/${watch.id}`, { method: 'DELETE' });
-      await loadList();
-    } catch (err) {
-      console.error(err);
-      alert('删除失败，请稍后重试');
-    }
-  });
+  const deleteBtn = node.querySelector('.watch-card__action--delete');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = window.confirm('确定要删除这个监控吗？');
+      if (!confirmed) return;
+      try {
+        await fetchJson(`/loblaws/watches/${watch.id}`, { method: 'DELETE' });
+        await loadList();
+      } catch (err) {
+        console.error(err);
+        alert('删除失败，请稍后重试');
+      }
+    });
+  }
 
   return node;
 }
@@ -174,51 +194,69 @@ function setFormFeedback(message, type = 'info') {
   }
 }
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const url = urlInput.value.trim();
-  const label = labelInput.value.trim();
-  if (!url) {
-    setFormFeedback('请填写商品链接', 'error');
-    urlInput.focus();
-    return;
-  }
+if (form && urlInput) {
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const url = urlInput.value.trim();
+    if (!url) {
+      setFormFeedback('请填写商品链接', 'error');
+      urlInput.focus();
+      return;
+    }
 
-  setFormFeedback('提交中，请稍候…');
-  const payload = { url };
-  if (label) payload.label = label;
+    setFormFeedback('提交中，请稍候…');
+    const payload = { url };
 
-  try {
-    await fetchJson('/loblaws/watches', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    setFormFeedback('已刷新最新信息', 'success');
-    form.reset();
-    await loadList();
-  } catch (err) {
-    console.error(err);
-    setFormFeedback('添加失败，请确认链接是否正确', 'error');
-  }
-});
+    try {
+      await fetchJson('/loblaws/watches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setFormFeedback('已刷新最新信息', 'success');
+      form.reset();
+      await loadList();
+    } catch (err) {
+      console.error(err);
+      setFormFeedback('添加失败，请确认链接是否正确', 'error');
+    }
+  });
+}
 
-refreshAllBtn.addEventListener('click', async () => {
-  if (loadingAll) return;
-  loadingAll = true;
-  refreshAllBtn.disabled = true;
-  refreshAllBtn.textContent = '刷新中…';
-  try {
-    await fetchJson('/loblaws/watches/refresh', { method: 'POST' });
-    await loadList();
-  } catch (err) {
-    console.error(err);
-    alert('刷新失败，请稍后再试。');
-  } finally {
-    loadingAll = false;
-    refreshAllBtn.disabled = false;
-    refreshAllBtn.textContent = '刷新全部';
-  }
-});
+if (refreshAllBtn) {
+  refreshAllBtn.addEventListener('click', async () => {
+    if (loadingAll) return;
+    loadingAll = true;
+    refreshAllBtn.disabled = true;
+    refreshAllBtn.textContent = '刷新中…';
+    try {
+      await fetchJson('/loblaws/watches/refresh', { method: 'POST' });
+      await loadList();
+    } catch (err) {
+      console.error(err);
+      alert('刷新失败，请稍后再试。');
+    } finally {
+      loadingAll = false;
+      refreshAllBtn.disabled = false;
+      refreshAllBtn.textContent = '刷新全部';
+    }
+  });
+}
+
+if (manageLink) {
+  manageLink.addEventListener('click', async (event) => {
+    event.preventDefault();
+    const password = window.prompt('请输入访问密码');
+    if (!password) return;
+    try {
+      const hash = await sha256Hex(password);
+      const url = new URL(manageLink.href, window.location.origin);
+      url.searchParams.set('token', hash);
+      window.location.href = url.toString();
+    } catch (err) {
+      console.error(err);
+    }
+  });
+}
 
 loadList().catch((err) => console.error(err));
