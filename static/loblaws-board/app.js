@@ -6,7 +6,6 @@ const urlInput = document.getElementById('watch-url');
 const formFeedback = document.getElementById('form-feedback');
 const refreshAllBtn = document.getElementById('refresh-all');
 const manageLink = document.querySelector('.board-header__manage');
-const boardContainer = document.querySelector('[data-board-root]') || document.body;
 const initialTokens = new URLSearchParams(window.location.search).get('token') || null;
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', {
@@ -284,19 +283,24 @@ if (refreshAllBtn) {
 }
 
 if (manageLink) {
-  manageLink.addEventListener('click', async (event) => {
-    event.preventDefault();
-    const password = window.prompt('请输入访问密码');
-    if (!password) return;
-    try {
-      const hash = await sha256Hex(password);
-      const url = new URL(manageLink.href, window.location.origin);
-      url.searchParams.set('token', hash);
-      window.location.href = url.toString();
-    } catch (err) {
-      console.error(err);
-    }
-  });
+  const manageUrl = new URL(manageLink.href, window.location.origin);
+  if (initialTokens) {
+    manageUrl.searchParams.set('token', initialTokens);
+    manageLink.href = manageUrl.toString();
+  } else {
+    manageLink.addEventListener('click', async (event) => {
+      event.preventDefault();
+      const password = window.prompt('请输入访问密码');
+      if (!password) return;
+      try {
+        const hash = await sha256Hex(password);
+        manageUrl.searchParams.set('token', hash);
+        window.location.href = manageUrl.toString();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  }
 }
 
 loadList().catch((err) => console.error(err));
