@@ -34,25 +34,13 @@ async function sha256Hex(value) {
   return Math.abs(hash).toString(16);
 }
 
-function mapSaleType(type) {
-  if (!type) return null;
-  const upper = String(type).toUpperCase();
-  const mappings = {
-    SPECIAL: '促销中',
-    CLEARANCE: '清仓特价',
-    DEAL: '优惠中',
-    SALE: '促销中',
-  };
-  return mappings[upper] || (upper !== 'REGULAR' ? '促销中' : null);
-}
-
 function getSaleLabel(item) {
   if (!item) return null;
   if (item.sale_text && item.sale_text.trim()) return item.sale_text.trim();
   if (item.sale_badge_name && String(item.sale_badge_name).trim()) {
     return String(item.sale_badge_name).trim();
   }
-  return mapSaleType(item.sale_type);
+  return null;
 }
 
 function hasActiveSale(item) {
