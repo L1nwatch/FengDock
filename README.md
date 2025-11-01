@@ -30,6 +30,7 @@ Everything is tested and deployed through GitHub Actions → GHCR → SSH redepl
 - **Proxy awareness**: new routes or static pages usually need a matching stanza in `deploy/Caddyfile`, plus the runtime Dockerfile must copy any new templates/assets.
 - **Tests before push**: `PYTHONPATH=. .venv/bin/pytest` (this runs unit + Playwright UI tests). CI blocks deployments if the suite fails.
 - **Private board password**: use environment variable `PRIVATE_PAGE_PASSWORD_HASH` (SHA-256 hex) for `/board/manage`; during local tinkering export it manually, in CI we hash the `PRIVATE_PAGE_PASSWORD` secret.
+- **Shared footer**: the JSON viewer and Loblaws pages inject the footer from `static/common/footer.html` via `static/common/footer.js`; reuse that snippet for any new tool pages to keep styling consistent.
 
 Loblaws board specifics:
 
