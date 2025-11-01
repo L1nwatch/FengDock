@@ -6,6 +6,8 @@ const urlInput = document.getElementById('watch-url');
 const formFeedback = document.getElementById('form-feedback');
 const refreshAllBtn = document.getElementById('refresh-all');
 const manageLink = document.querySelector('.board-header__manage');
+const boardContainer = document.querySelector('[data-board-root]') || document.body;
+const initialTokens = new URLSearchParams(window.location.search).get('token') || null;
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', {
   style: 'currency',
@@ -183,7 +185,11 @@ function renderWatchCard(watch) {
 
 async function loadList() {
   try {
-    const data = await fetchJson('/loblaws/watches');
+    const url = new URL('/loblaws/watches', window.location.origin);
+    if (initialTokens) {
+      url.searchParams.set('token', initialTokens);
+    }
+    const data = await fetchJson(url.toString());
     listCache = Array.isArray(data) ? [...data] : [];
     listCache.sort((a, b) => {
       const dealA = hasActiveSale(a) ? 1 : 0;
@@ -260,7 +266,11 @@ if (refreshAllBtn) {
     refreshAllBtn.disabled = true;
     refreshAllBtn.textContent = '刷新中…';
     try {
-      await fetchJson('/loblaws/watches/refresh', { method: 'POST' });
+      const url = new URL('/loblaws/watches/refresh', window.location.origin);
+      if (initialTokens) {
+        url.searchParams.set('token', initialTokens);
+      }
+      await fetchJson(url.toString(), { method: 'POST' });
       await loadList();
     } catch (err) {
       console.error(err);
