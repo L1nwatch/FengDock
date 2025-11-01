@@ -196,7 +196,33 @@ async function loadList() {
       url.searchParams.set('token', initialTokens);
     }
     const data = await fetchJson(url.toString());
-    listCache = Array.isArray(data) ? [...data] : [];
+    const rawList = Array.isArray(data) ? [...data] : [];
+    if (!form) {
+      const deduped = new Map();
+      rawList.forEach((item) => {
+        const code = item && item.product_code;
+        if (!code) return;
+        const existing = deduped.get(code);
+        if (!existing) {
+          deduped.set(code, item);
+          return;
+        }
+        const existingSale = hasActiveSale(existing);
+        const newSale = hasActiveSale(item);
+        if (newSale && !existingSale) {
+          deduped.set(code, item);
+          return;
+        }
+        const existingTime = toTimestamp(existing.last_checked_at);
+        const newTime = toTimestamp(item.last_checked_at);
+        if (newTime > existingTime) {
+          deduped.set(code, item);
+        }
+      });
+      listCache = Array.from(deduped.values());
+    } else {
+      listCache = rawList;
+    }
     listCache.sort((a, b) => {
       const dealA = hasActiveSale(a) ? 1 : 0;
       const dealB = hasActiveSale(b) ? 1 : 0;
