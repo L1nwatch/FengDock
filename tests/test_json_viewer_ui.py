@@ -119,7 +119,7 @@ def test_loblaws_board_and_manage_views(page):
     os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
     _seed_loblaws_watch()
 
-    page.goto(f"{BASE_URL}/board", wait_until="load")
+    page.goto(f"{BASE_URL}/board", wait_until="domcontentloaded")
     page.wait_for_selector(".watch-card__title")
 
     titles = page.locator(".watch-card__title").all_inner_texts()
@@ -131,7 +131,7 @@ def test_loblaws_board_and_manage_views(page):
     hash_value = hashlib.sha256(b"secret").hexdigest()
     os.environ["PRIVATE_PAGE_PASSWORD_HASH"] = hash_value
 
-    page.goto(f"{BASE_URL}/board/manage?token={hash_value}", wait_until="load")
+    page.goto(f"{BASE_URL}/board/manage?token={hash_value}", wait_until="domcontentloaded")
     page.wait_for_selector("#watch-form")
 
     assert page.locator("#watch-form").is_visible()
