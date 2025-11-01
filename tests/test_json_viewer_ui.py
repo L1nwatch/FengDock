@@ -60,23 +60,41 @@ def _seed_loblaws_watch() -> None:
     now = datetime.now(timezone.utc)
     with session_scope() as session:
         session.query(models.LoblawsWatch).delete()
-        session.add(
-            models.LoblawsWatch(
-                url=SAMPLE_WATCH_URL,
-                product_code="20077874001_EA",
-                store_id="1032",
-                name="Natrel Lactose Free 2%",
-                brand="Natrel",
-                image_url="https://example.com/sample.png",
-                current_price=6.75,
-                price_unit="ea",
-                regular_price=7.14,
-                sale_text="SAVE $0.39",
-                sale_expiry=datetime(2025, 12, 3, tzinfo=timezone.utc),
-                stock_status="IN_STOCK",
-                last_checked_at=now,
-                last_change_at=now,
-            )
+        session.add_all(
+            [
+                models.LoblawsWatch(
+                    url=SAMPLE_WATCH_URL,
+                    product_code="20077874001_EA",
+                    store_id="1032",
+                    name="Natrel Lactose Free 2%",
+                    brand="Natrel",
+                    image_url="https://example.com/sample.png",
+                    current_price=6.75,
+                    price_unit="ea",
+                    regular_price=7.14,
+                    sale_text="SAVE $0.39",
+                    sale_expiry=datetime(2025, 12, 3, tzinfo=timezone.utc),
+                    stock_status="IN_STOCK",
+                    last_checked_at=now,
+                    last_change_at=now,
+                ),
+                models.LoblawsWatch(
+                    url="https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA",
+                    product_code="20077874001_EA",
+                    store_id="1032",
+                    name="Natrel Lactose Free 2%",
+                    brand="Natrel",
+                    image_url="https://example.com/sample.png",
+                    current_price=6.99,
+                    price_unit="ea",
+                    regular_price=7.14,
+                    sale_text=None,
+                    sale_expiry=None,
+                    stock_status="IN_STOCK",
+                    last_checked_at=now,
+                    last_change_at=now,
+                ),
+            ]
         )
 
 
@@ -124,6 +142,9 @@ def test_loblaws_board_and_manage_views(page):
 
     titles = page.locator(".watch-card__title").all_inner_texts()
     assert any("Natrel" in title for title in titles)
+    assert page.locator(".watch-card__title").count() == 1
+    sale_text = page.locator(".watch-card__sale").first.inner_text()
+    assert "SAVE" in sale_text
 
     assert page.locator(".board-header__manage").is_visible()
     assert page.locator(".watch-card__action--delete").count() == 0
@@ -136,7 +157,7 @@ def test_loblaws_board_and_manage_views(page):
 
     assert page.locator("#watch-form").is_visible()
     assert page.locator(".watch-card__action--delete").count() >= 1
-    assert page.locator(".watch-card__title").first.inner_text() != ""
+    assert page.locator(".watch-card__title").count() == 2
 
     with session_scope() as session:
         session.query(models.LoblawsWatch).delete()

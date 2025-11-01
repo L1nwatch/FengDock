@@ -17,6 +17,13 @@ FastAPI backend and static homepage for FengDock. The service exposes a REST API
 2. Run the API: `uv run uvicorn app.main:app --reload`
 3. Visit the API docs at `http://localhost:8000/docs`
 
+### Development Workflow Notes
+
+- Prefer the project virtualenv (`.venv`) for local commands, e.g. `PYTHONPATH=. .venv/bin/pytest` and `.venv/bin/playwright install`. The CI pipeline mirrors this environment.
+- When touching frontend JavaScript under `static/`, always bump the `?v=` cache-buster in the corresponding HTML templates (`tools/*.html`) so browsers pull the latest bundle.
+- Adding new public routes typically requires updating `deploy/Caddyfile` (to proxy the path) and ensuring the runtime image copies any new static assets or templates referenced by the route.
+- Before pushing, run the full suite with `PYTHONPATH=. .venv/bin/pytest`; the GitHub Actions workflow does the same to gate deployments.
+
 To run the stack with Caddy locally:
 
 ```bash
