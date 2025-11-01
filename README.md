@@ -1,6 +1,12 @@
 # FengDock
 
-FastAPI backend and static homepage for FengDock. The service exposes a REST API for managing homepage links, stores data in SQLite, and schedules background link health checks with APScheduler. A Docker-based deployment bundles the API with a Caddy reverse proxy, with continuous delivery via GitHub Actions and GHCR.
+Personal portal composed of:
+
+- **FastAPI backend** (`app/`) serving the homepage links API, Loblaws board pages, and background jobs (link health + Loblaws refresh).
+- **Static frontend** (`index.html`, `static/`, `tools/`) with the periodic-table home, JSON viewer, and Loblaws board/manager.
+- **Caddy reverse proxy** (see `deploy/Caddyfile`) shipping alongside the backend via Docker compose.
+
+Everything is tested and deployed through GitHub Actions → GHCR → SSH redeploy on the VPS.
 
 ## Stack
 
@@ -19,10 +25,16 @@ FastAPI backend and static homepage for FengDock. The service exposes a REST API
 
 ### Development Workflow Notes
 
-- Prefer the project virtualenv (`.venv`) for local commands, e.g. `PYTHONPATH=. .venv/bin/pytest` and `.venv/bin/playwright install`. The CI pipeline mirrors this environment.
-- When touching frontend JavaScript under `static/`, always bump the `?v=` cache-buster in the corresponding HTML templates (`tools/*.html`) so browsers pull the latest bundle.
-- Adding new public routes typically requires updating `deploy/Caddyfile` (to proxy the path) and ensuring the runtime image copies any new static assets or templates referenced by the route.
-- Before pushing, run the full suite with `PYTHONPATH=. .venv/bin/pytest`; the GitHub Actions workflow does the same to gate deployments.
+- **Use the repo virtualenv**: run tooling as `PYTHONPATH=. .venv/bin/pytest`, `.venv/bin/playwright install`, etc. `uv sync` keeps it up to date and the CI job mirrors the same environment.
+- **Frontend cache busting**: whenever `static/**` JS/CSS changes, bump the `?v=` query string in the relevant template under `tools/` so browsers fetch the new asset.
+- **Proxy awareness**: new routes or static pages usually need a matching stanza in `deploy/Caddyfile`, plus the runtime Dockerfile must copy any new templates/assets.
+- **Tests before push**: `PYTHONPATH=. .venv/bin/pytest` (this runs unit + Playwright UI tests). CI blocks deployments if the suite fails.
+- **Private board password**: use environment variable `PRIVATE_PAGE_PASSWORD_HASH` (SHA-256 hex) for `/board/manage`; during local tinkering export it manually, in CI we hash the `PRIVATE_PAGE_PASSWORD` secret.
+
+Loblaws board specifics:
+
+- `/board` shows read-only cards sorted by active sales first, with duplicates deduplicated by `product_code`.
+- `/board/manage` accepts the hashed token (via `?token=` prompt) and exposes add/delete/refresh controls. The frontend carries the token into fetch calls.
 
 To run the stack with Caddy locally:
 
@@ -37,8 +49,9 @@ SQLite files are stored in `data/` (ignored by git). Background jobs run automat
 
 1. Create `.env` on the server based on `.env.example`, setting at minimum:
    - `GHCR_IMAGE=ghcr.io/<your-gh-username>/fengdock:latest`
-   - `DOMAIN=your.domain` (must match the Cloudflare DNS record)
+   - `DOMAIN=your.domain`
    - Optional: `CADDY_GLOBAL_OPTIONS="email you@example.com"`
+   - Optional: `PRIVATE_PAGE_PASSWORD_HASH=<sha256 hex>` (only needed for manual deployments; the GitHub Action auto-populates it when `PRIVATE_PAGE_PASSWORD` secret is set).
 2. Ensure `docker`, `docker compose`, and `git` are installed on the VPS and the repo is cloned in `${DEPLOY_PATH}`.
 3. GitHub Actions workflow `.github/workflows/deploy.yml` builds and pushes the image, then SSHs to the VPS, syncs the git repo, and runs:
    ```bash
@@ -58,6 +71,7 @@ Add these secrets at repository level:
 - `DEPLOY_USER` – SSH user
 - `DEPLOY_PATH` – absolute path of the repo on the server
 - `DEPLOY_SSH_KEY` – private key with access to the VPS
+- `PRIVATE_PAGE_PASSWORD` – plaintext password used for `/board/manage` (workflow hashes it into `PRIVATE_PAGE_PASSWORD_HASH`).
 
 No extra registry credentials are required; the workflow logs into GHCR with `GITHUB_TOKEN`.
 
