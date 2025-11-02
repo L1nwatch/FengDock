@@ -289,9 +289,23 @@
   const table = document.querySelector('.periodic-table');
   if (!table) return;
 
+  table.classList.add('is-initializing');
+  table.style.visibility = 'hidden';
+
+  let hasRevealed = false;
+  const revealTable = () => {
+    if (hasRevealed) return;
+    hasRevealed = true;
+    table.style.removeProperty('visibility');
+    table.classList.remove('is-initializing');
+  };
+
   const MAX_ITEMS = 48;
   const cards = Array.from(table.querySelectorAll('.periodic-element'));
-  if (!cards.length) return;
+  if (!cards.length) {
+    revealTable();
+    return;
+  }
   const rankMap = new Map();
   const MAX_RENDER = Math.min(MAX_ITEMS, cards.length);
 
@@ -389,6 +403,7 @@
         }
       });
       renderOrderedCards();
+      revealTable();
       return;
     }
 
@@ -421,12 +436,15 @@
       syncCardStats(card, stats);
     });
     renderOrderedCards();
+    revealTable();
   };
 
   fetch(`/api/links/?ordering=clicks&limit=${MAX_ITEMS}`)
     .then((response) => (response.ok ? response.json() : []))
     .then(applyOrdering)
-    .catch(() => {});
+    .catch(() => {
+      revealTable();
+    });
 
   table.addEventListener(
     'click',

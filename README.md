@@ -23,6 +23,12 @@ Everything is tested and deployed through GitHub Actions → GHCR → SSH redepl
 2. Run the API: `uv run uvicorn app.main:app --reload`
 3. Visit the API docs at `http://localhost:8000/docs`
 
+### Tests
+
+- Install dependencies first with `uv sync` so `.venv/` is created.
+- Run the full FastAPI + Playwright suite from the repo root: `PYTHONPATH=. .venv/bin/pytest` (or equivalently `uv run pytest`).
+- Make sure nothing else is bound to `127.0.0.1:8123` before launching the tests—the Playwright fixtures start the app server on that port.
+
 ### Development Workflow Notes
 
 - **Use the repo virtualenv**: run tooling as `PYTHONPATH=. .venv/bin/pytest`, `.venv/bin/playwright install`, etc. `uv sync` keeps it up to date and the CI job mirrors the same environment.
