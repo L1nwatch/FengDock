@@ -292,6 +292,59 @@
   const MAX_ITEMS = 48;
   const cards = Array.from(table.querySelectorAll('.periodic-element'));
   if (!cards.length) return;
+  const rankMap = new Map();
+  const MAX_RENDER = Math.min(MAX_ITEMS, cards.length);
+
+  const getPrimaryCategory = (card) => {
+    if (card.dataset.categoryClass) return card.dataset.categoryClass;
+    const classes = Array.from(card.classList).filter(
+      (cls) => cls && cls !== 'periodic-element'
+    );
+    const category = classes[0] || 'intense-work';
+    card.dataset.categoryClass = category;
+    return category;
+  };
+
+  const syncCardStats = (card, stats) => {
+    card.dataset.clickCount = String(stats.count);
+    card.dataset.lastClick = stats.lastClick ? String(stats.lastClick) : '';
+    const counterField = card.querySelector('.card-click-count');
+    if (counterField) {
+      counterField.value = String(stats.count);
+      counterField.dataset.lastClick = stats.lastClickRaw || '';
+    }
+  };
+
+  const renderOrderedCards = () => {
+    const preservedNodes = Array.from(table.children).filter(
+      (node) =>
+        node.nodeType === Node.ELEMENT_NODE && !node.classList.contains('periodic-element')
+    );
+
+    const knownCards = cards
+      .filter((card) => rankMap.has(card.dataset.linkUrl))
+      .sort((a, b) => {
+        const statsA = rankMap.get(a.dataset.linkUrl);
+        const statsB = rankMap.get(b.dataset.linkUrl);
+        if (statsB.count !== statsA.count) return statsB.count - statsA.count;
+        if (statsB.lastClick !== statsA.lastClick) return statsB.lastClick - statsA.lastClick;
+        return statsA.index - statsB.index;
+      });
+
+    const unknownCards = cards
+      .filter((card) => !rankMap.has(card.dataset.linkUrl))
+      .sort((a, b) => Number(a.dataset.originalIndex) - Number(b.dataset.originalIndex));
+
+    const orderedCards = knownCards.concat(unknownCards);
+    const limited = orderedCards.slice(0, MAX_RENDER);
+
+    const fragment = document.createDocumentFragment();
+    preservedNodes.forEach((node) => fragment.appendChild(node));
+    limited.forEach((card) => fragment.appendChild(card));
+
+    table.textContent = '';
+    table.appendChild(fragment);
+  };
 
   cards.forEach((card, index) => {
     card.dataset.originalIndex = String(index);
@@ -300,11 +353,46 @@
     } catch (err) {
       card.dataset.linkUrl = card.getAttribute('href') || '';
     }
+
+    const descriptionEl = card.querySelector('.description');
+    if (descriptionEl && !card.dataset.displayTitle) {
+      card.dataset.displayTitle = descriptionEl.textContent.trim();
+    }
+    if (!card.dataset.descriptionText) {
+      card.dataset.descriptionText = card.dataset.description || '';
+    }
+    getPrimaryCategory(card);
+
+    let counterField = card.querySelector('.card-click-count');
+    if (!counterField) {
+      counterField = document.createElement('input');
+      counterField.type = 'hidden';
+      counterField.className = 'card-click-count';
+      card.appendChild(counterField);
+    }
+
+    card.dataset.clickCount = card.dataset.clickCount || '0';
+    card.dataset.lastClick = card.dataset.lastClick || '';
+    counterField.value = counterField.value || '0';
   });
 
   const applyOrdering = (links) => {
-    if (!Array.isArray(links) || !links.length) return;
-    const rankMap = new Map();
+    if (!Array.isArray(links) || !links.length) {
+      rankMap.clear();
+      cards.forEach((card) => {
+        card.dataset.clickCount = card.dataset.clickCount || '0';
+        card.dataset.lastClick = card.dataset.lastClick || '';
+        const counterField = card.querySelector('.card-click-count');
+        if (counterField) {
+          counterField.value = counterField.value || '0';
+          counterField.dataset.lastClick = counterField.dataset.lastClick || '';
+        }
+      });
+      renderOrderedCards();
+      return;
+    }
+
+    rankMap.clear();
 
     links.forEach((link, index) => {
       if (!link || !link.url) return;
@@ -318,25 +406,21 @@
         index,
         count: Number(link.click_count ?? 0),
         lastClick: link.last_clicked_at ? Date.parse(link.last_clicked_at) || 0 : 0,
+        lastClickRaw: link.last_clicked_at || '',
       });
     });
 
-    const sortedCards = cards.slice().sort((a, b) => {
-      const statsA = rankMap.get(a.dataset.linkUrl);
-      const statsB = rankMap.get(b.dataset.linkUrl);
-      if (statsA && statsB) {
-        if (statsB.count !== statsA.count) return statsB.count - statsA.count;
-        if (statsB.lastClick !== statsA.lastClick) return statsB.lastClick - statsA.lastClick;
-        return statsA.index - statsB.index;
-      }
-      if (statsA) return -1;
-      if (statsB) return 1;
-      return Number(a.dataset.originalIndex) - Number(b.dataset.originalIndex);
-    });
+    cards.forEach((card) => {
+      const stats = rankMap.get(card.dataset.linkUrl) || {
+        count: 0,
+        lastClick: 0,
+        lastClickRaw: '',
+        index: Number(card.dataset.originalIndex),
+      };
 
-    const limited = sortedCards.slice(0, Math.min(MAX_ITEMS, sortedCards.length));
-    table.innerHTML = '';
-    limited.forEach((card) => table.appendChild(card));
+      syncCardStats(card, stats);
+    });
+    renderOrderedCards();
   };
 
   fetch(`/api/links/?ordering=clicks&limit=${MAX_ITEMS}`)
@@ -349,10 +433,40 @@
     (event) => {
       const card = event.target.closest('.periodic-element');
       if (!card || !card.dataset.linkUrl) return;
+      const stats = rankMap.get(card.dataset.linkUrl) || {
+        index: Number(card.dataset.originalIndex),
+        count: Number(card.dataset.clickCount || '0'),
+        lastClick: Number(card.dataset.lastClick || '0'),
+        lastClickRaw: card.querySelector('.card-click-count')?.dataset.lastClick || '',
+      };
+      const nowTimestamp = Date.now();
+      const nowIso = new Date(nowTimestamp).toISOString();
+      const updatedStats = {
+        ...stats,
+        count: stats.count + 1,
+        lastClick: nowTimestamp,
+        lastClickRaw: nowIso,
+      };
+      rankMap.set(card.dataset.linkUrl, updatedStats);
+      syncCardStats(card, updatedStats);
+      renderOrderedCards();
+
+      const payload = {
+        url: card.dataset.linkUrl,
+        title:
+          card.dataset.displayTitle ||
+          card.querySelector('.description')?.textContent?.trim() ||
+          card.dataset.linkUrl,
+        description: card.dataset.descriptionText || card.dataset.description || '',
+        category: getPrimaryCategory(card),
+        color_class: card.dataset.categoryClass || getPrimaryCategory(card),
+        order_index: Number(card.dataset.originalIndex) || 0,
+      };
+
       fetch('/api/links/click', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: card.dataset.linkUrl }),
+        body: JSON.stringify(payload),
         keepalive: true,
       }).catch(() => {});
     },

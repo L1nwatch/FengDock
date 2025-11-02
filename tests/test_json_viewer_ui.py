@@ -2,7 +2,7 @@ import hashlib
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import uvicorn
@@ -18,6 +18,7 @@ BASE_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 SAMPLE_WATCH_URL = "https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA?source=nspt"
 GITHUB_URL = "https://github.com/L1nwatch"
 NOTION_URL = "https://watch0.notion.site/"
+ANKI_URL = "https://anki.watch0.top/"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -103,6 +104,7 @@ def _seed_loblaws_watch() -> None:
 def _seed_links_for_home() -> None:
     with session_scope() as session:
         session.query(models.Link).delete()
+        now = datetime.now(timezone.utc)
         session.add_all(
             [
                 models.Link(
@@ -113,7 +115,7 @@ def _seed_links_for_home() -> None:
                     color_class="intense-work",
                     order_index=0,
                     click_count=150,
-                    last_clicked_at=datetime(2025, 11, 1, tzinfo=timezone.utc),
+                    last_clicked_at=now - timedelta(days=5),
                 ),
                 models.Link(
                     title="Notion",
@@ -123,7 +125,17 @@ def _seed_links_for_home() -> None:
                     color_class="intense-work",
                     order_index=1,
                     click_count=10,
-                    last_clicked_at=datetime(2025, 10, 20, tzinfo=timezone.utc),
+                    last_clicked_at=now - timedelta(days=10),
+                ),
+                models.Link(
+                    title="Anki",
+                    description="",
+                    url=ANKI_URL,
+                    category="intense-work",
+                    color_class="intense-work",
+                    order_index=2,
+                    click_count=320,
+                    last_clicked_at=now - timedelta(hours=1),
                 ),
             ]
         )
@@ -199,20 +211,88 @@ def test_loblaws_board_and_manage_views(page):
 def test_homepage_click_ordering(page):
     _seed_links_for_home()
 
-    page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
-    page.wait_for_selector('.periodic-table .periodic-element')
-    page.wait_for_timeout(1000)
+    try:
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.wait_for_selector('.periodic-table .periodic-element')
 
-    titles = page.locator('.periodic-table .periodic-element .description').all_inner_texts()
-    if not (titles and titles[0] == 'GitHub'):
-        hrefs = page.evaluate(
-            "Array.from(document.querySelectorAll('.periodic-table .periodic-element')).map(el => el.getAttribute('href'))"
+        page.wait_for_function(
+            """
+            () => {
+              const first = document.querySelector('.periodic-table .periodic-element');
+              if (!first) return false;
+              const desc = first.querySelector('.description');
+              return desc && desc.textContent.trim() === 'Anki' && first.dataset.clickCount === '320';
+            }
+            """,
+            timeout=5000,
         )
-        link_urls = page.evaluate(
-            "Array.from(document.querySelectorAll('.periodic-table .periodic-element')).map(el => el.dataset.linkUrl)"
-        )
-        pytest.fail(f"Unexpected homepage order: {titles[:5]}, hrefs: {hrefs[:5]}, data: {link_urls[:5]}")
-    assert titles[1] == 'Notion'
 
+        top_titles = page.locator('.periodic-table .periodic-element .description').all_inner_texts()
+        assert top_titles[0] == 'Anki'
+        assert top_titles[1] == 'GitHub'
+        assert 'Notion' in top_titles[:3]
+
+        first_hidden_value = page.eval_on_selector(
+            '.periodic-table .periodic-element .card-click-count', 'el => el.value'
+        )
+        assert first_hidden_value == '320'
+
+        first_last_click = page.eval_on_selector(
+            '.periodic-table .periodic-element', 'el => el.dataset.lastClick'
+        )
+        assert first_last_click, "Expected last click timestamp to be present on top card"
+    finally:
+        with session_scope() as session:
+            session.query(models.Link).delete()
+
+
+@pytest.mark.e2e
+def test_homepage_click_persists_to_database(page):
     with session_scope() as session:
         session.query(models.Link).delete()
+
+    try:
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.wait_for_selector('.periodic-table .periodic-element')
+
+        page.wait_for_timeout(500)
+        first_title_before = page.locator('.periodic-table .periodic-element .description').first.inner_text()
+        assert first_title_before != 'Anki'
+
+        page.locator('.periodic-element .description', has_text='Anki').click()
+
+        page.wait_for_function(
+            """
+            () => {
+              const first = document.querySelector('.periodic-table .periodic-element');
+              if (!first) return false;
+              const desc = first.querySelector('.description');
+              return desc && desc.textContent.trim() === 'Anki';
+            }
+            """,
+            timeout=5000,
+        )
+
+        page.wait_for_timeout(500)
+
+        page.reload(wait_until='domcontentloaded')
+        page.wait_for_selector('.periodic-table .periodic-element')
+        page.wait_for_function(
+            """
+            () => {
+              const first = document.querySelector('.periodic-table .periodic-element');
+              if (!first) return false;
+              const desc = first.querySelector('.description');
+              return desc && desc.textContent.trim() === 'Anki';
+            }
+            """,
+            timeout=5000,
+        )
+
+        with session_scope() as session:
+            link = session.query(models.Link).filter_by(url=ANKI_URL).one_or_none()
+            assert link is not None, "Expected Anki link to be created in the database"
+            assert link.click_count >= 1
+    finally:
+        with session_scope() as session:
+            session.query(models.Link).delete()

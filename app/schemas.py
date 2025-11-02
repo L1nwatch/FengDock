@@ -62,15 +62,32 @@ class LinkRead(LinkBase):
 
 
 class LinkClickPayload(BaseModel):
-    url: str
+    url: HttpUrl
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    color_class: Optional[str] = None
+    order_index: Optional[int] = None
 
     @field_validator("url")
     @classmethod
-    def strip_url(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("url cannot be empty")
+    def normalize_url(cls, value: HttpUrl) -> HttpUrl:
         return value
+
+    @field_validator("title", "description", "category", "color_class", mode="before")
+    @classmethod
+    def strip_optional_strings(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned if cleaned else None
+        return value
+
+    @field_validator("order_index")
+    @classmethod
+    def non_negative_index(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        return max(0, value)
 
 
 class LoblawsWatchBase(BaseModel):

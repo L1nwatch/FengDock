@@ -69,7 +69,21 @@ def register_click(
     payload: schemas.LinkClickPayload,
     session: Session = Depends(get_session),
 ) -> None:
-    link = crud.get_link_by_url(session, payload.url)
+    link = crud.get_link_by_url(session, str(payload.url))
+    if not link:
+        if not payload.title or not payload.category:
+            return
+        color_class = payload.color_class or payload.category or "intense-work"
+        order_index = payload.order_index or 0
+        create_payload = schemas.LinkCreate(
+            title=payload.title,
+            description=payload.description,
+            url=str(payload.url),
+            category=payload.category,
+            color_class=color_class,
+            order_index=order_index,
+        )
+        link = crud.create_link(session, create_payload)
     if not link:
         return
     crud.record_link_click(session, link)

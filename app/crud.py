@@ -51,7 +51,9 @@ def get_link_by_url(session: Session, url: str) -> Optional[models.Link]:
 
 
 def create_link(session: Session, payload: schemas.LinkCreate) -> models.Link:
-    link = models.Link(**payload.model_dump())
+    data = payload.model_dump()
+    data["url"] = str(payload.url)
+    link = models.Link(**data)
     session.add(link)
     session.commit()
     session.refresh(link)
