@@ -16,7 +16,7 @@ from .database import session_scope
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler(timezone="UTC")
+scheduler: AsyncIOScheduler | None = None
 CHECK_INTERVAL_MINUTES = int(os.getenv("LINK_CHECK_INTERVAL_MINUTES", "30"))
 LOBLAWS_INTERVAL_MINUTES = int(os.getenv("LOBLAWS_REFRESH_INTERVAL_MINUTES", "60"))
 
@@ -72,11 +72,33 @@ async def run_loblaws_refresh_job() -> None:
         logger.debug("Loblaws refresh found no products to update")
 
 
-def configure_jobs() -> None:
-    if scheduler.get_job("link_health_check"):
-        scheduler.remove_job("link_health_check")
+def _ensure_scheduler() -> AsyncIOScheduler:
+    """Recreate scheduler when its bound loop is gone (common in tests)."""
 
-    scheduler.add_job(
+    global scheduler
+    loop = asyncio.get_running_loop()
+    existing_loop = getattr(scheduler, "_eventloop", None)
+
+    if scheduler is None or existing_loop is None or existing_loop.is_closed():
+        scheduler = AsyncIOScheduler(timezone="UTC", event_loop=loop)
+        return scheduler
+
+    if existing_loop is not loop:
+        try:
+            scheduler.shutdown(wait=False)
+        except Exception:  # pragma: no cover - defensive cleanup
+            logger.debug("Failed to shutdown old scheduler", exc_info=True)
+        scheduler = AsyncIOScheduler(timezone="UTC", event_loop=loop)
+        return scheduler
+
+    return scheduler
+
+
+def configure_jobs(current_scheduler: AsyncIOScheduler) -> None:
+    if current_scheduler.get_job("link_health_check"):
+        current_scheduler.remove_job("link_health_check")
+
+    current_scheduler.add_job(
         run_link_health_check,
         "interval",
         minutes=CHECK_INTERVAL_MINUTES,
@@ -86,10 +108,10 @@ def configure_jobs() -> None:
         replace_existing=True,
     )
 
-    if scheduler.get_job("loblaws_refresh"):
-        scheduler.remove_job("loblaws_refresh")
+    if current_scheduler.get_job("loblaws_refresh"):
+        current_scheduler.remove_job("loblaws_refresh")
 
-    scheduler.add_job(
+    current_scheduler.add_job(
         run_loblaws_refresh_job,
         "interval",
         minutes=LOBLAWS_INTERVAL_MINUTES,
@@ -101,13 +123,16 @@ def configure_jobs() -> None:
 
 
 def start_scheduler() -> None:
-    configure_jobs()
-    if not scheduler.running:
-        scheduler.start()
+    current_scheduler = _ensure_scheduler()
+    configure_jobs(current_scheduler)
+    if not current_scheduler.running:
+        current_scheduler.start()
         logger.info("Scheduler started")
 
 
 async def shutdown_scheduler() -> None:
-    if scheduler.running:
+    global scheduler
+    if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
         logger.info("Scheduler shut down")
+    scheduler = None
