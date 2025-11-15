@@ -68,7 +68,7 @@ previewTree.addEventListener("click", (event) => {
   if (expand) {
     const { fullValue } = expand.dataset;
     if (fullValue) {
-      openModal(fullValue);
+      openModal(parseFullValue(fullValue));
     }
   }
 });
@@ -257,6 +257,14 @@ function openModal(text) {
 function closeModal() {
   modal.hidden = true;
   modalContent.textContent = "";
+}
+
+function parseFullValue(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return raw;
+  }
 }
 
 // Initialize preview

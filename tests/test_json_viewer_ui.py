@@ -160,7 +160,8 @@ def test_json_viewer_modal_hidden_and_render(page):
     tree_text = page.inner_text("#preview-tree")
     assert "message" in tree_text and "items" in tree_text
 
-    page.fill("#json-input", sample_data.replace("hello", "x" * 220))
+    long_message = "x" * 140 + "\\nnext line of data"
+    page.fill("#json-input", sample_data.replace("hello", long_message))
     page.wait_for_selector(".json-node__expand")
 
     page.locator(".json-node__expand").first.click()
@@ -169,6 +170,9 @@ def test_json_viewer_modal_hidden_and_render(page):
 
     modal_text = page.inner_text("#modal-content")
     assert "xxxxxxxx" in modal_text
+    assert "next line of data" in modal_text
+    assert "\\n" not in modal_text
+    assert "\n" in modal_text
 
     page.click(".fd-modal__close")
     is_hidden_again = page.eval_on_selector("#modal", "el => el.hasAttribute('hidden')")
