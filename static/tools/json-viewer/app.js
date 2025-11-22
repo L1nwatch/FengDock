@@ -4,6 +4,7 @@ const formatBtn = document.getElementById("format-btn");
 const clearBtn = document.getElementById("clear-btn");
 const sampleBtn = document.getElementById("sample-btn");
 const errorMessage = document.getElementById("error-message");
+const normalizeQuotesBtn = document.getElementById("normalize-quotes-btn");
 const modal = document.getElementById("modal");
 const modalClose = modal.querySelector(".fd-modal__close");
 const modalContent = document.getElementById("modal-content");
@@ -44,6 +45,13 @@ clearBtn.addEventListener("click", () => {
 
 sampleBtn.addEventListener("click", () => {
   textarea.value = JSON.stringify(SAMPLE_JSON, null, 2);
+  clearTimeout(autoPreviewTimerId);
+  updatePreview();
+});
+
+normalizeQuotesBtn.addEventListener("click", () => {
+  if (!textarea.value) return;
+  textarea.value = textarea.value.replace(/'/g, '"');
   clearTimeout(autoPreviewTimerId);
   updatePreview();
 });
