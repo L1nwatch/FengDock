@@ -135,7 +135,7 @@ function updatePreview({ normalizeTextarea = false, showErrorOnEmpty = false } =
       textarea.value = JSON.stringify(parsed, null, 2);
     }
   } catch (err) {
-    showError("解析失败：" + err.message);
+    handleParseError(err, raw);
   }
 }
 
@@ -240,13 +240,54 @@ function createEmptyPlaceholder() {
   return placeholder;
 }
 
-function showError(message) {
-  errorMessage.textContent = message;
+function showError(message, snippetParts = null) {
+  errorMessage.innerHTML = "";
+  const messageEl = document.createElement("div");
+  messageEl.textContent = message;
+  errorMessage.appendChild(messageEl);
+
+  if (snippetParts) {
+    const snippetEl = document.createElement("pre");
+    snippetEl.className = "fd-input__error-snippet";
+    if (snippetParts.truncatedBefore) {
+      snippetEl.append("…");
+    }
+
+    const beforeSpan = document.createElement("span");
+    beforeSpan.textContent = snippetParts.before;
+    snippetEl.appendChild(beforeSpan);
+
+    const highlight = document.createElement("mark");
+    highlight.textContent = snippetParts.highlight || "⏎";
+    if (!snippetParts.highlight) {
+      highlight.dataset.placeholder = "true";
+    }
+    snippetEl.appendChild(highlight);
+
+    const afterSpan = document.createElement("span");
+    afterSpan.textContent = snippetParts.after;
+    snippetEl.appendChild(afterSpan);
+
+    if (snippetParts.truncatedAfter) {
+      snippetEl.append("…");
+    }
+
+    if (!snippetParts.highlight) {
+      const hint = document.createElement("span");
+      hint.className = "fd-input__error-snippet-hint";
+      hint.textContent = "（输入结束）";
+      snippetEl.appendChild(hint);
+    }
+
+    errorMessage.appendChild(snippetEl);
+  }
+
   errorMessage.hidden = false;
 }
 
 function hideError() {
   errorMessage.hidden = true;
+  errorMessage.textContent = "";
 }
 
 function openModal(text) {
@@ -265,6 +306,63 @@ function parseFullValue(raw) {
   } catch (error) {
     return raw;
   }
+}
+
+function handleParseError(error, raw) {
+  const { position, reason } = extractJsonErrorDetails(error, raw);
+  if (typeof position === "number") {
+    const normalizedPos = Math.max(0, Math.min(position, raw.length));
+    const { line, column } = getLineAndColumn(raw, normalizedPos);
+    const snippetParts = createSnippetParts(raw, normalizedPos);
+    showError(`解析失败（第 ${line} 行，第 ${column} 列）：${reason}`, snippetParts);
+  } else {
+    showError("解析失败：" + reason);
+  }
+}
+
+function extractJsonErrorDetails(error, raw) {
+  const message = error && error.message ? String(error.message) : "未知错误";
+  const positionMatch = message.match(/position (\d+)/i);
+  let position = positionMatch ? Number(positionMatch[1]) : null;
+  if (position === null && /end of JSON input/i.test(message)) {
+    position = raw.length;
+  }
+  const cutoffIndex = message.indexOf(" in JSON");
+  const reason =
+    cutoffIndex > -1 ? message.slice(0, cutoffIndex) : message;
+  return { position, reason };
+}
+
+function getLineAndColumn(text, position) {
+  const safePos = Math.max(0, Math.min(position, text.length));
+  let line = 1;
+  let column = 1;
+  for (let i = 0; i < safePos; i += 1) {
+    if (text[i] === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+  return { line, column };
+}
+
+function createSnippetParts(text, position) {
+  const radius = 30;
+  const start = Math.max(0, position - radius);
+  const end = Math.min(text.length, position + radius);
+  const highlightChar = text[position] || "";
+  const before = text.slice(start, position);
+  const after = highlightChar ? text.slice(position + 1, end) : "";
+
+  return {
+    before,
+    after,
+    highlight: highlightChar,
+    truncatedBefore: start > 0,
+    truncatedAfter: end < text.length || (!highlightChar && position < text.length),
+  };
 }
 
 // Initialize preview

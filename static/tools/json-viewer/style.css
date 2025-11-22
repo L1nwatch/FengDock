@@ -126,6 +126,41 @@ body {
   font-size: 0.95rem;
 }
 
+.fd-input__error-snippet {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fd-input__error-snippet mark {
+  background: rgba(255, 97, 109, 0.35);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+.fd-input__error-snippet mark[data-placeholder="true"] {
+  border: 1px dashed rgba(255, 97, 109, 0.6);
+  background: transparent;
+  color: var(--error);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fd-input__error-snippet-hint {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .fd-preview__header {
   display: flex;
   justify-content: flex-start;
