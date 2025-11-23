@@ -11,6 +11,7 @@ const nodeTemplate = document.getElementById("json-node-template");
 
 const STRING_CUTOFF = 120;
 const AUTO_PREVIEW_DELAY_MS = 350;
+const AUTO_FIXERS = [normalizeSingleQuotes, normalizePythonNullLiteral];
 const SAMPLE_JSON = {
   name: "尝试修正",
   version: "0.1.0",
@@ -118,7 +119,7 @@ function schedulePreview() {
 function updatePreview({
   normalizeTextarea = false,
   showErrorOnEmpty = false,
-  autoFixAttempted = false,
+  autoFixIndex = 0,
 } = {}) {
   const raw = textarea.value;
   if (!raw.trim()) {
@@ -139,15 +140,36 @@ function updatePreview({
       textarea.value = JSON.stringify(parsed, null, 2);
     }
   } catch (err) {
-    if (!autoFixAttempted) {
-      const normalized = normalizeSingleQuotes(raw);
-      if (normalized !== raw) {
-        textarea.value = normalized;
-        return updatePreview({ normalizeTextarea, showErrorOnEmpty, autoFixAttempted: true });
-      }
+    const retried = attemptAutoFix({
+      raw,
+      normalizeTextarea,
+      showErrorOnEmpty,
+      autoFixIndex,
+    });
+    if (retried) {
+      return;
     }
     handleParseError(err, raw);
   }
+}
+
+function attemptAutoFix({ raw, normalizeTextarea, showErrorOnEmpty, autoFixIndex }) {
+  let current = raw;
+  for (let i = autoFixIndex; i < AUTO_FIXERS.length; i += 1) {
+    const fixer = AUTO_FIXERS[i];
+    const fixed = fixer(current);
+    if (fixed !== current) {
+      textarea.value = fixed;
+      updatePreview({
+        normalizeTextarea,
+        showErrorOnEmpty,
+        autoFixIndex: i + 1,
+      });
+      return true;
+    }
+    current = fixed;
+  }
+  return false;
 }
 
 function normalizeSingleQuotes(input) {
@@ -158,6 +180,54 @@ function normalizeSingleQuotes(input) {
     const escapedForDoubles = withoutEscapedSingles.replace(/"/g, '\\"');
     return `"${escapedForDoubles}"`;
   });
+}
+
+function normalizePythonNullLiteral(input) {
+  if (!input) return input;
+  let inString = false;
+  let escaped = false;
+  let result = "";
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (inString) {
+      result += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      result += char;
+      continue;
+    }
+
+    if (
+      char === "N" &&
+      input.startsWith("None", i) &&
+      isWordBoundary(input[i - 1]) &&
+      isWordBoundary(input[i + 4])
+    ) {
+      result += "null";
+      i += 3;
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
+function isWordBoundary(char) {
+  if (!char) return true;
+  return !/[0-9A-Za-z_]/.test(char);
 }
 
 function createNode(key, value) {
