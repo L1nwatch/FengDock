@@ -4,7 +4,6 @@ const formatBtn = document.getElementById("format-btn");
 const clearBtn = document.getElementById("clear-btn");
 const sampleBtn = document.getElementById("sample-btn");
 const errorMessage = document.getElementById("error-message");
-const normalizeQuotesBtn = document.getElementById("normalize-quotes-btn");
 const modal = document.getElementById("modal");
 const modalClose = modal.querySelector(".fd-modal__close");
 const modalContent = document.getElementById("modal-content");
@@ -13,7 +12,7 @@ const nodeTemplate = document.getElementById("json-node-template");
 const STRING_CUTOFF = 120;
 const AUTO_PREVIEW_DELAY_MS = 350;
 const SAMPLE_JSON = {
-  name: "FengDock",
+  name: "尝试修正",
   version: "0.1.0",
   description: "A personal portal with scheduled link checks and handy utilities.",
   features: ["Static homepage", "FastAPI backend", "SQLite data store", "Scheduler"],
@@ -45,13 +44,6 @@ clearBtn.addEventListener("click", () => {
 
 sampleBtn.addEventListener("click", () => {
   textarea.value = JSON.stringify(SAMPLE_JSON, null, 2);
-  clearTimeout(autoPreviewTimerId);
-  updatePreview();
-});
-
-normalizeQuotesBtn.addEventListener("click", () => {
-  if (!textarea.value) return;
-  textarea.value = textarea.value.replace(/'/g, '"');
   clearTimeout(autoPreviewTimerId);
   updatePreview();
 });
@@ -123,7 +115,11 @@ function schedulePreview() {
   autoPreviewTimerId = setTimeout(() => updatePreview(), AUTO_PREVIEW_DELAY_MS);
 }
 
-function updatePreview({ normalizeTextarea = false, showErrorOnEmpty = false } = {}) {
+function updatePreview({
+  normalizeTextarea = false,
+  showErrorOnEmpty = false,
+  autoFixAttempted = false,
+} = {}) {
   const raw = textarea.value;
   if (!raw.trim()) {
     resetPreview();
@@ -143,8 +139,25 @@ function updatePreview({ normalizeTextarea = false, showErrorOnEmpty = false } =
       textarea.value = JSON.stringify(parsed, null, 2);
     }
   } catch (err) {
+    if (!autoFixAttempted) {
+      const normalized = normalizeSingleQuotes(raw);
+      if (normalized !== raw) {
+        textarea.value = normalized;
+        return updatePreview({ normalizeTextarea, showErrorOnEmpty, autoFixAttempted: true });
+      }
+    }
     handleParseError(err, raw);
   }
+}
+
+function normalizeSingleQuotes(input) {
+  if (!input) return input;
+  const straightQuotes = input.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
+  return straightQuotes.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, content) => {
+    const withoutEscapedSingles = content.replace(/\\'/g, "'");
+    const escapedForDoubles = withoutEscapedSingles.replace(/"/g, '\\"');
+    return `"${escapedForDoubles}"`;
+  });
 }
 
 function createNode(key, value) {
