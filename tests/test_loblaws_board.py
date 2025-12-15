@@ -153,3 +153,15 @@ def test_manage_requires_token_when_configured(client, monkeypatch):
     assert authorized.status_code == 200
 
     monkeypatch.delenv("PRIVATE_PAGE_PASSWORD_HASH", raising=False)
+
+
+def test_loblaws_mutations_require_token_when_configured(client, monkeypatch):
+    hash_value = hashlib.sha256(b"secret").hexdigest()
+    monkeypatch.setenv("PRIVATE_PAGE_PASSWORD_HASH", hash_value)
+    _install_fake_payload(monkeypatch, [SAMPLE_PAYLOAD_V1.copy()])
+
+    unauthorized = client.post("/loblaws/watches", json={"url": SAMPLE_URL})
+    assert unauthorized.status_code == 401
+
+    authorized = client.post("/loblaws/watches", params={"token": "secret"}, json={"url": SAMPLE_URL})
+    assert authorized.status_code == 201

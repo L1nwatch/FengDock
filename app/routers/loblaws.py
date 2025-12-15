@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import crud, schemas
+from ..auth import require_manage_auth
 from ..database import get_session
 from ..loblaws import extract_product_code, refresh_all_watches, refresh_single_watch
 
@@ -40,6 +41,7 @@ def get_watch(watch_id: int, session: Session = Depends(get_session)) -> schemas
 async def create_watch(
     payload: schemas.LoblawsWatchCreate,
     session: Session = Depends(get_session),
+    _auth: None = Depends(require_manage_auth),
 ) -> schemas.LoblawsWatchRead:
     product_code = extract_product_code(str(payload.url))
     existing = crud.get_loblaws_watch_by_url(session, payload.url)
@@ -59,6 +61,7 @@ async def update_watch(
     watch_id: int,
     payload: schemas.LoblawsWatchUpdate,
     session: Session = Depends(get_session),
+    _auth: None = Depends(require_manage_auth),
 ) -> schemas.LoblawsWatchRead:
     watch = crud.get_loblaws_watch(session, watch_id)
     if not watch:
@@ -70,7 +73,11 @@ async def update_watch(
 
 
 @router.delete("/watches/{watch_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_watch(watch_id: int, session: Session = Depends(get_session)) -> None:
+def delete_watch(
+    watch_id: int,
+    session: Session = Depends(get_session),
+    _auth: None = Depends(require_manage_auth),
+) -> None:
     watch = crud.get_loblaws_watch(session, watch_id)
     if not watch:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watch not found")
@@ -81,6 +88,7 @@ def delete_watch(watch_id: int, session: Session = Depends(get_session)) -> None
 async def refresh_watch_endpoint(
     watch_id: int,
     session: Session = Depends(get_session),
+    _auth: None = Depends(require_manage_auth),
 ) -> schemas.LoblawsWatchRead:
     updated = await refresh_single_watch(watch_id)
     if updated is None:
@@ -95,7 +103,10 @@ async def refresh_watch_endpoint(
     response_model=List[schemas.LoblawsWatchRead],
     status_code=status.HTTP_200_OK,
 )
-async def refresh_all_endpoint(session: Session = Depends(get_session)) -> List[schemas.LoblawsWatchRead]:
+async def refresh_all_endpoint(
+    session: Session = Depends(get_session),
+    _auth: None = Depends(require_manage_auth),
+) -> List[schemas.LoblawsWatchRead]:
     await refresh_all_watches()
     watches = crud.list_loblaws_watches(session)
     for watch in watches:

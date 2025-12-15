@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import hashlib
-import os
-import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import require_manage_auth
 from .database import Base, engine
 from .routers import links, loblaws
 from .scheduler import run_link_health_check, shutdown_scheduler, start_scheduler
@@ -40,30 +38,6 @@ TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
 BOARD_FILE = TOOLS_DIR / "loblaws-board.html"
 BOARD_MANAGE_FILE = TOOLS_DIR / "loblaws-manage.html"
-def require_manage_auth(request: Request) -> None:
-    expected_hash = os.getenv("PRIVATE_PAGE_PASSWORD_HASH")
-    if not expected_hash:
-        return
-    password = (
-        request.query_params.get("token")
-        or request.headers.get("X-Private-Token")
-        or request.headers.get("X-Loblaws-Token")
-    )
-    if not password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
-
-    token_hash = password.strip().lower()
-    if len(token_hash) != 64 or not all(c in "0123456789abcdef" for c in token_hash):
-        token_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-    if not secrets.compare_digest(token_hash, expected_hash.lower()):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
 
 
 def create_app() -> FastAPI:

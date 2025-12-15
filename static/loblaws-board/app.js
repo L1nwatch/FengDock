@@ -7,6 +7,7 @@ const formFeedback = document.getElementById('form-feedback');
 const refreshAllBtn = document.getElementById('refresh-all');
 const manageLink = document.querySelector('.board-header__manage');
 const initialTokens = new URLSearchParams(window.location.search).get('token') || null;
+const authHeaders = initialTokens ? { 'X-Loblaws-Token': initialTokens } : {};
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', {
   style: 'currency',
@@ -161,7 +162,10 @@ function renderWatchCard(watch) {
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      await fetchJson(`/loblaws/watches/${watch.id}/refresh`, { method: 'POST' });
+      await fetchJson(`/loblaws/watches/${watch.id}/refresh`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
       await loadList();
     } catch (err) {
       console.error(err);
@@ -177,7 +181,10 @@ function renderWatchCard(watch) {
       const confirmed = window.confirm('确定要删除这个监控吗？');
       if (!confirmed) return;
       try {
-        await fetchJson(`/loblaws/watches/${watch.id}`, { method: 'DELETE' });
+        await fetchJson(`/loblaws/watches/${watch.id}`, {
+          method: 'DELETE',
+          headers: authHeaders,
+        });
         await loadList();
       } catch (err) {
         console.error(err);
@@ -195,7 +202,7 @@ async function loadList() {
     if (initialTokens) {
       url.searchParams.set('token', initialTokens);
     }
-    const data = await fetchJson(url.toString());
+    const data = await fetchJson(url.toString(), { headers: authHeaders });
     const rawList = Array.isArray(data) ? [...data] : [];
     if (!form) {
       const deduped = new Map();
@@ -278,7 +285,7 @@ if (form && urlInput) {
     try {
       await fetchJson('/loblaws/watches', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       setFormFeedback('已刷新最新信息', 'success');
@@ -302,7 +309,7 @@ if (refreshAllBtn) {
       if (initialTokens) {
         url.searchParams.set('token', initialTokens);
       }
-      await fetchJson(url.toString(), { method: 'POST' });
+      await fetchJson(url.toString(), { method: 'POST', headers: authHeaders });
       await loadList();
     } catch (err) {
       console.error(err);
