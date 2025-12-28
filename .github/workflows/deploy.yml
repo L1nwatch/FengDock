@@ -65,7 +65,7 @@ jobs:
       - name: Build mind-map assets
         run: |
           set -euo pipefail
-          cd web
+          cd vendor/mind-map/web
           npm ci
           npm run build
           cd ../..
