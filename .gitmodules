@@ -1,0 +1,4 @@
+[submodule "vendor/mind-map"]
+	path = vendor/mind-map
+	url = https://github.com/L1nwatch/mind-map
+	branch = fengdock
