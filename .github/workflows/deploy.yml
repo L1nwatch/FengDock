@@ -65,14 +65,14 @@ jobs:
       - name: Build mind-map assets
         run: |
           set -euo pipefail
-          cd vendor/mind-map/web
+          ROOT="$GITHUB_WORKSPACE"
+          cd "$ROOT/vendor/mind-map/web"
           npm ci
           npm run build
-          cd ../..
-          rm -rf static/mind-map
-          mkdir -p static/mind-map
-          cp -R vendor/mind-map/dist static/mind-map/dist
-          cp vendor/mind-map/index.html static/mind-map/index.html
+          rm -rf "$ROOT/static/mind-map"
+          mkdir -p "$ROOT/static/mind-map"
+          cp -R "$ROOT/vendor/mind-map/dist" "$ROOT/static/mind-map/dist"
+          cp "$ROOT/vendor/mind-map/index.html" "$ROOT/static/mind-map/index.html"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
