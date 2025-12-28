@@ -43,6 +43,33 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+          cache: "npm"
+          cache-dependency-path: vendor/mind-map/web/package-lock.json
+
+      - name: Build mind-map assets
+        run: |
+          set -euo pipefail
+          git submodule update --init --recursive vendor/mind-map
+          cd vendor/mind-map
+          git fetch origin
+          if git show-ref --verify --quiet refs/remotes/origin/fengdock; then
+            git checkout -B fengdock origin/fengdock
+          else
+            git checkout -B main origin/main
+          fi
+          cd web
+          npm ci
+          npm run build
+          cd ../..
+          rm -rf static/mind-map
+          mkdir -p static/mind-map
+          cp -R vendor/mind-map/dist static/mind-map/dist
+          cp vendor/mind-map/index.html static/mind-map/index.html
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
