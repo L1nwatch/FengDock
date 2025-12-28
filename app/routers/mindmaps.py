@@ -6,6 +6,7 @@ import json
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -87,10 +88,12 @@ def update_doc(
         current = _serialize_doc(doc)
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "message": "Version conflict",
-                "current": current.model_dump(),
-            },
+            content=jsonable_encoder(
+                {
+                    "message": "Version conflict",
+                    "current": current.model_dump(),
+                }
+            ),
         )
     doc = crud.update_mindmap_doc(session, doc, payload, force=payload.force)
     return _serialize_doc(doc)
