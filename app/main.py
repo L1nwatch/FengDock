@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import require_manage_auth
 from .database import Base, engine
-from .routers import links, loblaws
+from .routers import links, loblaws, mindmaps
 from .scheduler import run_link_health_check, shutdown_scheduler, start_scheduler
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,8 @@ def create_app() -> FastAPI:
     app.include_router(links.router)
     app.include_router(links.router, prefix="/api")
     app.include_router(loblaws.router)
+    app.include_router(mindmaps.router)
+    app.include_router(mindmaps.router, prefix="/api")
 
     return app
 

@@ -74,3 +74,21 @@ class LoblawsWatch(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class MindMapDoc(Base):
+    """Stored mind-map document for shared editing."""
+
+    __tablename__ = "mind_map_docs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False, default="Untitled")
+    data_json = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

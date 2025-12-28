@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Iterable, List, Optional
 
 from sqlalchemy import select
@@ -145,3 +146,47 @@ def update_loblaws_watch(
 def delete_loblaws_watch(session: Session, watch: models.LoblawsWatch) -> None:
     session.delete(watch)
     session.commit()
+
+
+def list_mindmap_docs(session: Session) -> List[models.MindMapDoc]:
+    statement = select(models.MindMapDoc).order_by(
+        models.MindMapDoc.updated_at.desc(),
+        models.MindMapDoc.id.desc(),
+    )
+    return list(session.scalars(statement))
+
+
+def get_mindmap_doc(session: Session, doc_id: int) -> Optional[models.MindMapDoc]:
+    return session.get(models.MindMapDoc, doc_id)
+
+
+def create_mindmap_doc(
+    session: Session, payload: schemas.MindMapDocCreate
+) -> models.MindMapDoc:
+    doc = models.MindMapDoc(
+        title=payload.title,
+        data_json=json.dumps(payload.data, ensure_ascii=False),
+    )
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+    return doc
+
+
+def update_mindmap_doc(
+    session: Session,
+    doc: models.MindMapDoc,
+    payload: schemas.MindMapDocUpdate,
+    *,
+    force: bool = False,
+) -> models.MindMapDoc:
+    if payload.title is not None:
+        doc.title = payload.title
+    if payload.data is not None:
+        doc.data_json = json.dumps(payload.data, ensure_ascii=False)
+    if force or payload.data is not None or payload.title is not None:
+        doc.version = (doc.version or 1) + 1
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+    return doc

@@ -146,3 +146,52 @@ class LoblawsWatchRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MindMapDocBase(BaseModel):
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        cleaned = value.strip()
+        return cleaned or "Untitled"
+
+
+class MindMapDocCreate(MindMapDocBase):
+    data: dict
+
+
+class MindMapDocUpdate(BaseModel):
+    title: Optional[str] = None
+    data: Optional[dict] = None
+    expected_version: Optional[int] = None
+    force: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def normalize_optional_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or "Untitled"
+
+
+class MindMapDocListItem(MindMapDocBase):
+    id: int
+    version: int
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MindMapDocRead(MindMapDocBase):
+    id: int
+    data: dict
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
