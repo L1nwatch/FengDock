@@ -43,14 +43,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "16"
-          cache: "npm"
-          cache-dependency-path: vendor/mind-map/web/package-lock.json
-
-      - name: Build mind-map assets
+      - name: Update mind-map submodule
         run: |
           set -euo pipefail
           git submodule update --init --recursive vendor/mind-map
@@ -61,6 +54,17 @@ jobs:
           else
             git checkout -B main origin/main
           fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+          cache: "npm"
+          cache-dependency-path: vendor/mind-map/web/package-lock.json
+
+      - name: Build mind-map assets
+        run: |
+          set -euo pipefail
           cd web
           npm ci
           npm run build
