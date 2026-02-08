@@ -5,3 +5,6 @@ __pycache__/
 data/
 .DS_Store
 *.sqlite3
+.coverage
+coverage.xml
+htmlcov/

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import socket
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -13,18 +14,22 @@ from app.database import session_scope
 from app import models
 
 SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 8123
-BASE_URL = f"http://{SERVER_HOST}:{SERVER_PORT}"
 SAMPLE_WATCH_URL = "https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA?source=nspt"
 GITHUB_URL = "https://github.com/L1nwatch"
 NOTION_URL = "https://watch0.notion.site/"
 ANKI_URL = "https://anki.watch0.top/"
 
+def _get_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((SERVER_HOST, 0))
+        return int(sock.getsockname()[1])
 
-@pytest.fixture(scope="session", autouse=True)
-def _launch_server():
+
+@pytest.fixture(scope="session")
+def base_url():
     """Launch the FastAPI app with uvicorn in a background thread for UI tests."""
-    config = uvicorn.Config(app, host=SERVER_HOST, port=SERVER_PORT, log_level="warning")
+    port = _get_free_port()
+    config = uvicorn.Config(app, host=SERVER_HOST, port=port, log_level="warning")
     server = uvicorn.Server(config)
 
     thread = threading.Thread(target=server.run, name="uvicorn-test-server", daemon=True)
@@ -36,7 +41,7 @@ def _launch_server():
             raise RuntimeError("Timed out waiting for uvicorn server to start")
         time.sleep(0.05)
 
-    yield
+    yield f"http://{SERVER_HOST}:{port}"
 
     server.should_exit = True
     thread.join(timeout=5)
@@ -142,8 +147,8 @@ def _seed_links_for_home() -> None:
 
 
 @pytest.mark.e2e
-def test_json_viewer_modal_hidden_and_render(page):
-    page.goto(f"{BASE_URL}/tools/json-viewer", wait_until="networkidle")
+def test_json_viewer_modal_hidden_and_render(page, base_url):
+    page.goto(f"{base_url}/tools/json-viewer", wait_until="networkidle")
 
     is_hidden = page.eval_on_selector("#modal", "el => el.hasAttribute('hidden')")
     assert is_hidden, "Modal dialog should be hidden on initial load"
@@ -180,11 +185,11 @@ def test_json_viewer_modal_hidden_and_render(page):
 
 
 @pytest.mark.e2e
-def test_loblaws_board_and_manage_views(page):
+def test_loblaws_board_and_manage_views(page, base_url):
     os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
     _seed_loblaws_watch()
 
-    page.goto(f"{BASE_URL}/board", wait_until="domcontentloaded")
+    page.goto(f"{base_url}/board", wait_until="domcontentloaded")
     page.wait_for_selector(".watch-card__title")
 
     titles = page.locator(".watch-card__title").all_inner_texts()
@@ -199,7 +204,7 @@ def test_loblaws_board_and_manage_views(page):
     hash_value = hashlib.sha256(b"secret").hexdigest()
     os.environ["PRIVATE_PAGE_PASSWORD_HASH"] = hash_value
 
-    page.goto(f"{BASE_URL}/board/manage?token={hash_value}", wait_until="domcontentloaded")
+    page.goto(f"{base_url}/board/manage?token={hash_value}", wait_until="domcontentloaded")
     page.wait_for_selector("#watch-form")
 
     assert page.locator("#watch-form").is_visible()
@@ -212,11 +217,11 @@ def test_loblaws_board_and_manage_views(page):
 
 
 @pytest.mark.e2e
-def test_homepage_click_ordering(page):
+def test_homepage_click_ordering(page, base_url):
     _seed_links_for_home()
 
     try:
-        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
         page.wait_for_selector('.periodic-table .periodic-element')
 
         page.wait_for_function(
@@ -251,12 +256,12 @@ def test_homepage_click_ordering(page):
 
 
 @pytest.mark.e2e
-def test_homepage_click_persists_to_database(page):
+def test_homepage_click_persists_to_database(page, base_url):
     with session_scope() as session:
         session.query(models.Link).delete()
 
     try:
-        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
         page.wait_for_selector('.periodic-table .periodic-element')
 
         page.wait_for_timeout(500)
