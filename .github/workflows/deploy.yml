@@ -36,9 +36,13 @@ jobs:
         run: uv run playwright install chromium
 
       - name: Run pytest
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: uv run python -m pytest
+        run: uv run python -m pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=70
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
