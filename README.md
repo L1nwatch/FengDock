@@ -1,5 +1,7 @@
 # FengDock
 
+FengDock is a personal portal that pairs a FastAPI backend with a static, tool-focused frontend, packaged for local development and VPS deployment via Docker. It also includes a git submodule at `vendor/mind-map` (tracking the `fengdock` branch of `L1nwatch/mind-map`) for embedded mind-map tooling.
+
 Personal portal composed of:
 
 - **FastAPI backend** (`app/`) serving the homepage links API, Loblaws board pages, and background jobs (link health + Loblaws refresh).
