@@ -13,7 +13,9 @@ Everything is tested and deployed through GitHub Actions → GHCR → SSH redepl
 ## Stack
 
 - Python 3.12 managed with [uv](https://github.com/astral-sh/uv)
-- FastAPI, SQLAlchemy, and SQLite (`data/db.sqlite3`)
+- FastAPI, SQLAlchemy, and SQLite
+  - FengDock DB: `/app/data/db.sqlite3`
+  - TriggerToDo DB: `/app/data/triggertodo.db`
 - APScheduler background job verifying link health
 - Docker + docker compose with Caddy reverse proxy
 - GitHub Actions building/pushing to GHCR and redeploying over SSH
@@ -53,12 +55,23 @@ GHCR_IMAGE=fengdock-backend:dev docker compose -f docker-compose.yml -f docker-c
 
 SQLite files are stored in `data/` (ignored by git). Background jobs run automatically after the app starts; adjust `LINK_CHECK_INTERVAL_MINUTES` in your `.env` file if needed.
 
+Database ownership in runtime container:
+
+- `db.sqlite3` is owned by FengDock APIs (`app/`).
+- `triggertodo.db` is owned by TriggerToDo APIs (`vendor/TriggerToDo/app`).
+- Do not import TriggerToDo data into `db.sqlite3`; keep TriggerToDo data in `triggertodo.db`.
+
 ## Production Deployment
 
 1. Create `.env` on the server based on `.env.example`, setting at minimum:
    - `GHCR_IMAGE=ghcr.io/<your-gh-username>/fengdock:latest`
    - `DOMAIN=your.domain`
    - Optional: `CADDY_GLOBAL_OPTIONS="email you@example.com"`
+   - Optional TriggerToDo overrides:
+     - `TRIGGERTODO_DATABASE_URL=sqlite:////app/data/triggertodo.db`
+     - `TRIGGERTODO_SESSION_SECRET_KEY=<long-random-secret>`
+     - `TRIGGERTODO_SESSION_COOKIE_NAME=triggertodo_session`
+     - `TRIGGERTODO_TRIGGER_ENGINE_INTERVAL_SECONDS=30`
 2. Ensure `docker`, `docker compose`, and `git` are installed on the VPS and the repo is cloned in `${DEPLOY_PATH}`.
 3. GitHub Actions workflow `.github/workflows/deploy.yml` builds and pushes the image, then SSHs to the VPS, syncs the git repo, and runs:
    ```bash
