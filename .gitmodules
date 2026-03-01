@@ -2,3 +2,7 @@
 	path = vendor/mind-map
 	url = https://github.com/L1nwatch/mind-map
 	branch = fengdock
+[submodule "vendor/TriggerToDo"]
+	path = vendor/TriggerToDo
+	url = https://github.com/L1nwatch/TriggerToDo.git
+	branch = main

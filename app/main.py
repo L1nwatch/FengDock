@@ -38,7 +38,7 @@ TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
 BOARD_FILE = TOOLS_DIR / "loblaws-board.html"
 BOARD_MANAGE_FILE = TOOLS_DIR / "loblaws-manage.html"
-TODO_FILE = TOOLS_DIR / "todo.html"
+TODO_INDEX_FILE = STATIC_DIR / "todo" / "index.html"
 
 
 def create_app() -> FastAPI:
@@ -70,11 +70,22 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Board not available") from exc
 
     @app.get("/todo", response_class=HTMLResponse, include_in_schema=False)
-    async def todo_page() -> str:
-        try:
-            return TODO_FILE.read_text(encoding="utf-8")
-        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
-            raise HTTPException(status_code=404, detail="Todo page not available") from exc
+    async def todo_page() -> HTMLResponse:
+        if TODO_INDEX_FILE.exists():
+            return HTMLResponse(TODO_INDEX_FILE.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            content="<h1>Todo frontend not built</h1><p>Build vendor/TriggerToDo/frontend first.</p>",
+            status_code=503,
+        )
+
+    @app.get("/todo/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
+    async def todo_spa_fallback(full_path: str) -> HTMLResponse:
+        if TODO_INDEX_FILE.exists():
+            return HTMLResponse(TODO_INDEX_FILE.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            content="<h1>Todo frontend not built</h1><p>Build vendor/TriggerToDo/frontend first.</p>",
+            status_code=503,
+        )
 
     @app.get("/board/manage", response_class=HTMLResponse, include_in_schema=False)
     async def loblaws_board_manage(
@@ -91,7 +102,7 @@ def create_app() -> FastAPI:
 
     @app.head("/todo", include_in_schema=False)
     async def todo_head() -> Response:
-        return Response(status_code=200)
+        return Response(status_code=200 if TODO_INDEX_FILE.exists() else 503)
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
@@ -100,7 +111,6 @@ def create_app() -> FastAPI:
     app.include_router(links.router)
     app.include_router(links.router, prefix="/api")
     app.include_router(loblaws.router)
-    app.include_router(todo.router)
     app.include_router(mindmaps.router)
     app.include_router(todo.router, prefix="/api")
     app.include_router(mindmaps.router, prefix="/api")

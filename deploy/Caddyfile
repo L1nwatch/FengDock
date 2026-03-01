@@ -29,16 +29,17 @@
         reverse_proxy backend:8000
     }
 
+    @todo path /todo /todo/*
+    handle @todo {
+        reverse_proxy backend:8000
+    }
+
     handle {
         root * /srv/www
         @json_viewer path "/tools/json-viewer"
         redir @json_viewer /tools/json-viewer.html 302
         @json_viewer_slash path "/tools/json-viewer/"
         redir @json_viewer_slash /tools/json-viewer.html 302
-        @todo path "/todo"
-        redir @todo /tools/todo.html 302
-        @todo_slash path "/todo/"
-        redir @todo_slash /tools/todo.html 302
         try_files {path} /index.html
         file_server
     }
