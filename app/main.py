@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .auth import require_manage_auth
@@ -39,6 +39,7 @@ STATIC_DIR = FRONTEND_ROOT / "static"
 BOARD_FILE = TOOLS_DIR / "loblaws-board.html"
 BOARD_MANAGE_FILE = TOOLS_DIR / "loblaws-manage.html"
 TODO_INDEX_FILE = STATIC_DIR / "todo" / "index.html"
+TODO_STATIC_DIR = STATIC_DIR / "todo"
 
 
 def create_app() -> FastAPI:
@@ -79,7 +80,13 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/todo/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
-    async def todo_spa_fallback(full_path: str) -> HTMLResponse:
+    async def todo_spa_fallback(full_path: str) -> Response:
+        # Serve built static assets from TriggerToDo dist under /todo/*.
+        if full_path.startswith("assets/") or full_path == "vite.svg":
+            asset_file = TODO_STATIC_DIR / full_path
+            if asset_file.exists() and asset_file.is_file():
+                return FileResponse(asset_file)
+
         if TODO_INDEX_FILE.exists():
             return HTMLResponse(TODO_INDEX_FILE.read_text(encoding="utf-8"))
         return HTMLResponse(
