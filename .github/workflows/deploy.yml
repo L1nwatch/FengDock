@@ -67,14 +67,12 @@ jobs:
           git fetch origin
           git checkout -B main origin/main
 
-      - name: Set up Node
+      - name: Set up Node (mind-map)
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "16"
           cache: "npm"
-          cache-dependency-path: |
-            vendor/mind-map/web/package-lock.json
-            vendor/TriggerToDo/frontend/package-lock.json
+          cache-dependency-path: vendor/mind-map/web/package-lock.json
 
       - name: Build mind-map assets
         run: |
@@ -87,6 +85,13 @@ jobs:
           mkdir -p "$ROOT/static/mind-map"
           cp -R "$ROOT/vendor/mind-map/dist" "$ROOT/static/mind-map/dist"
           cp "$ROOT/vendor/mind-map/index.html" "$ROOT/static/mind-map/index.html"
+
+      - name: Set up Node (TriggerToDo frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vendor/TriggerToDo/frontend/package-lock.json
 
       - name: Build TriggerToDo frontend assets
         run: |
