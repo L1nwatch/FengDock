@@ -6,7 +6,12 @@
 {$DOMAIN} {
     encode gzip zstd
 
-    handle_path /api/* {
+    @triggertodo_api path /api/health /api/todo/* /api/triggers /api/triggers/* /api/events /api/events/* /api/epics /api/epics/* /api/sync/* /api/jira/*
+    handle @triggertodo_api {
+        reverse_proxy backend:8001
+    }
+
+    handle /api/* {
         reverse_proxy backend:8000
     }
 

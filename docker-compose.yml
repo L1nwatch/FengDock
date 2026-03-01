@@ -4,6 +4,10 @@ services:
     restart: unless-stopped
     environment:
       LINK_CHECK_INTERVAL_MINUTES: ${LINK_CHECK_INTERVAL_MINUTES:-30}
+      DATABASE_URL: ${TRIGGERTODO_DATABASE_URL:-sqlite:////app/data/triggertodo.db}
+      SESSION_SECRET_KEY: ${TRIGGERTODO_SESSION_SECRET_KEY:-dev-secret-change-me}
+      SESSION_COOKIE_NAME: ${TRIGGERTODO_SESSION_COOKIE_NAME:-triggertodo_session}
+      TRIGGER_ENGINE_INTERVAL_SECONDS: ${TRIGGERTODO_TRIGGER_ENGINE_INTERVAL_SECONDS:-30}
     volumes:
       - backend_db:/app/data
     networks:

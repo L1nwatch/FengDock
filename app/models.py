@@ -92,22 +92,3 @@ class MindMapDoc(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-
-
-class TodoItem(Base):
-    """Simple personal todo item stored in FengDock sqlite."""
-
-    __tablename__ = "todo_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
-    notes = Column(Text, nullable=True)
-    is_done = Column(Boolean, nullable=False, default=False)
-    order_index = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )

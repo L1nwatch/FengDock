@@ -18,10 +18,15 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+COPY vendor/TriggerToDo/pyproject.toml vendor/TriggerToDo/uv.lock ./vendor/TriggerToDo/
+RUN cd /app/vendor/TriggerToDo && UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen --no-dev
+
 COPY app ./app
+COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
+COPY scripts ./scripts
 
 FROM python:3.12-slim AS runtime
 
@@ -35,10 +40,14 @@ COPY --from=builder /app/.venv ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 COPY app ./app
+COPY --from=builder /app/vendor/TriggerToDo/.venv ./vendor/TriggerToDo/.venv
+COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
+COPY scripts ./scripts
 COPY pyproject.toml uv.lock ./
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8001
+CMD ["python", "scripts/run_servers.py"]
