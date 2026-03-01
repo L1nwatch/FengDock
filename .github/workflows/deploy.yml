@@ -99,7 +99,7 @@ jobs:
           ROOT="$GITHUB_WORKSPACE"
           cd "$ROOT/vendor/TriggerToDo/frontend"
           npm ci
-          npm run build -- --base=/todo/
+          npm run build -- --base=/static/todo/
           rm -rf "$ROOT/static/todo"
           mkdir -p "$ROOT/static/todo"
           cp -R "$ROOT/vendor/TriggerToDo/frontend/dist/"* "$ROOT/static/todo/"

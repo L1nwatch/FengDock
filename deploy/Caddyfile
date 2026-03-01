@@ -29,11 +29,6 @@
         reverse_proxy backend:8000
     }
 
-    @todo path /todo /todo/*
-    handle @todo {
-        reverse_proxy backend:8000
-    }
-
     handle {
         root * /srv/www
         @json_viewer path "/tools/json-viewer"

@@ -24,11 +24,4 @@ def test_homepage_links_json_tool():
     response = client.get("/")
     assert response.status_code == 200
     assert "/tools/json-viewer" in response.text
-    assert "/todo" in response.text
-
-
-def test_todo_page_returns_ok():
-    response = client.get("/todo")
-    assert response.status_code in (200, 503)
-    if response.status_code == 503:
-        assert "Todo frontend not built" in response.text
+    assert "/static/todo/index.html" in response.text
