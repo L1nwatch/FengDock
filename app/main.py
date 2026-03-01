@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import require_manage_auth
 from .database import Base, engine
-from .routers import links, loblaws, mindmaps
+from .routers import links, loblaws, mindmaps, todo
 from .scheduler import run_link_health_check, shutdown_scheduler, start_scheduler
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
 BOARD_FILE = TOOLS_DIR / "loblaws-board.html"
 BOARD_MANAGE_FILE = TOOLS_DIR / "loblaws-manage.html"
+TODO_FILE = TOOLS_DIR / "todo.html"
 
 
 def create_app() -> FastAPI:
@@ -68,6 +69,13 @@ def create_app() -> FastAPI:
         except FileNotFoundError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(status_code=404, detail="Board not available") from exc
 
+    @app.get("/todo", response_class=HTMLResponse, include_in_schema=False)
+    async def todo_page() -> str:
+        try:
+            return TODO_FILE.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+            raise HTTPException(status_code=404, detail="Todo page not available") from exc
+
     @app.get("/board/manage", response_class=HTMLResponse, include_in_schema=False)
     async def loblaws_board_manage(
         _credentials: None = Depends(require_manage_auth),
@@ -81,6 +89,10 @@ def create_app() -> FastAPI:
     async def json_viewer_head() -> Response:
         return Response(status_code=200)
 
+    @app.head("/todo", include_in_schema=False)
+    async def todo_head() -> Response:
+        return Response(status_code=200)
+
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
@@ -88,7 +100,9 @@ def create_app() -> FastAPI:
     app.include_router(links.router)
     app.include_router(links.router, prefix="/api")
     app.include_router(loblaws.router)
+    app.include_router(todo.router)
     app.include_router(mindmaps.router)
+    app.include_router(todo.router, prefix="/api")
     app.include_router(mindmaps.router, prefix="/api")
 
     return app

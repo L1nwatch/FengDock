@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FengDock To-Do</title>
+    <link rel="stylesheet" href="/static/articles/Poppins.css">
+    <link rel="stylesheet" href="/static/homepage/reset.min.css">
+    <link rel="stylesheet" href="/static/tools/todo/style.css?v=20260301170000">
+    <link rel="shortcut icon" href="/static/favicon.ico">
+</head>
+<body>
+<header class="fd-header">
+    <a class="fd-header__home" href="/">← Back to FengDock</a>
+    <h1 class="fd-header__title">To-Do</h1>
+</header>
+<main class="fd-container">
+    <form id="todo-form" class="todo-form">
+        <label class="todo-form__label" for="todo-title">Task</label>
+        <div class="todo-form__row">
+            <input id="todo-title" name="title" type="text" maxlength="200" required placeholder="Add a new task">
+            <button type="submit">Add</button>
+        </div>
+        <textarea id="todo-notes" name="notes" maxlength="2000" placeholder="Notes (optional)"></textarea>
+    </form>
+
+    <section class="todo-section">
+        <h2>Pending</h2>
+        <ul id="todo-pending" class="todo-list"></ul>
+    </section>
+
+    <section class="todo-section">
+        <h2>Done</h2>
+        <ul id="todo-done" class="todo-list"></ul>
+    </section>
+</main>
+<div data-shared-footer></div>
+<script src="/static/tools/todo/app.js?v=20260301170000" type="module"></script>
+<script src="/static/common/footer.js" type="module"></script>
+</body>
+</html>

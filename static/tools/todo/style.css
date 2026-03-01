@@ -1,0 +1,152 @@
+body {
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(180deg, #f6fbff 0%, #edf4ff 100%);
+  color: #1f2937;
+  min-height: 100vh;
+}
+
+.fd-header {
+  max-width: 920px;
+  margin: 24px auto 8px;
+  padding: 0 16px;
+}
+
+.fd-header__home {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.fd-header__title {
+  margin-top: 8px;
+  font-size: 30px;
+}
+
+.fd-container {
+  max-width: 920px;
+  margin: 0 auto 32px;
+  padding: 16px;
+}
+
+.todo-form {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.todo-form__label {
+  display: block;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.todo-form__row {
+  display: flex;
+  gap: 8px;
+}
+
+.todo-form input,
+.todo-form textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.todo-form button {
+  border: none;
+  border-radius: 10px;
+  padding: 0 16px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.todo-form textarea {
+  margin-top: 10px;
+  min-height: 84px;
+  resize: vertical;
+}
+
+.todo-section {
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.todo-section h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.todo-list {
+  display: grid;
+  gap: 8px;
+}
+
+.todo-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.todo-item__title {
+  font-weight: 600;
+}
+
+.todo-item__notes {
+  margin-top: 4px;
+  color: #64748b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.todo-item__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.btn--danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.todo-empty {
+  color: #64748b;
+  padding: 8px 0;
+}
+
+@media (max-width: 640px) {
+  .todo-form__row {
+    flex-direction: column;
+  }
+
+  .todo-form button {
+    width: 100%;
+    height: 40px;
+  }
+
+  .todo-item {
+    flex-direction: column;
+  }
+}
