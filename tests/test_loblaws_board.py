@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 
-import hashlib
 import pytest
 from fastapi.testclient import TestClient
 
@@ -83,11 +82,6 @@ def client():
         yield test_client
 
 
-@pytest.fixture(autouse=True)
-def _clear_manage_env(monkeypatch):
-    monkeypatch.delenv("PRIVATE_PAGE_PASSWORD_HASH", raising=False)
-
-
 def _install_fake_payload(monkeypatch, payloads):
     async def _fake_fetch(product_code: str, *, store_id=None, client=None):
         try:
@@ -140,28 +134,3 @@ def test_board_pages_render(client):
     assert manage.status_code == 200
     assert "watch-card__action--delete" in manage.text
     assert "watch-form" in manage.text
-
-
-def test_manage_requires_token_when_configured(client, monkeypatch):
-    hash_value = hashlib.sha256(b"secret").hexdigest()
-    monkeypatch.setenv("PRIVATE_PAGE_PASSWORD_HASH", hash_value)
-
-    unauthorized = client.get("/board/manage")
-    assert unauthorized.status_code == 401
-
-    authorized = client.get("/board/manage", params={"token": "secret"})
-    assert authorized.status_code == 200
-
-    monkeypatch.delenv("PRIVATE_PAGE_PASSWORD_HASH", raising=False)
-
-
-def test_loblaws_mutations_require_token_when_configured(client, monkeypatch):
-    hash_value = hashlib.sha256(b"secret").hexdigest()
-    monkeypatch.setenv("PRIVATE_PAGE_PASSWORD_HASH", hash_value)
-    _install_fake_payload(monkeypatch, [SAMPLE_PAYLOAD_V1.copy()])
-
-    unauthorized = client.post("/loblaws/watches", json={"url": SAMPLE_URL})
-    assert unauthorized.status_code == 401
-
-    authorized = client.post("/loblaws/watches", params={"token": "secret"}, json={"url": SAMPLE_URL})
-    assert authorized.status_code == 201

@@ -113,13 +113,6 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            PASSWORD="${{ secrets.PRIVATE_PAGE_PASSWORD }}"
-            if [ -z "$PASSWORD" ]; then
-              echo "PRIVATE_PAGE_PASSWORD is not set; refusing to deploy"
-              exit 1
-            fi
-            HASH=$(printf '%s' "$PASSWORD" | sha256sum | awk '{print $1}')
-            export PRIVATE_PAGE_PASSWORD_HASH="$HASH"
             cd ${{ secrets.DEPLOY_PATH }}
             git fetch --all --prune
             git reset --hard origin/main

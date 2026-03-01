@@ -6,8 +6,6 @@ const urlInput = document.getElementById('watch-url');
 const formFeedback = document.getElementById('form-feedback');
 const refreshAllBtn = document.getElementById('refresh-all');
 const manageLink = document.querySelector('.board-header__manage');
-const initialTokens = new URLSearchParams(window.location.search).get('token') || null;
-const authHeaders = initialTokens ? { 'X-Loblaws-Token': initialTokens } : {};
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', {
   style: 'currency',
@@ -17,23 +15,6 @@ const currencyFormatter = new Intl.NumberFormat('en-CA', {
 
 let listCache = [];
 let loadingAll = false;
-
-async function sha256Hex(value) {
-  if (window.crypto && window.crypto.subtle) {
-    const data = new TextEncoder().encode(value);
-    const digest = await window.crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(digest));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  // Simple fallback hash for browsers without SubtleCrypto support
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16);
-}
 
 function getSaleLabel(item) {
   if (!item) return null;
@@ -164,7 +145,6 @@ function renderWatchCard(watch) {
     try {
       await fetchJson(`/loblaws/watches/${watch.id}/refresh`, {
         method: 'POST',
-        headers: authHeaders,
       });
       await loadList();
     } catch (err) {
@@ -183,7 +163,6 @@ function renderWatchCard(watch) {
       try {
         await fetchJson(`/loblaws/watches/${watch.id}`, {
           method: 'DELETE',
-          headers: authHeaders,
         });
         await loadList();
       } catch (err) {
@@ -198,11 +177,7 @@ function renderWatchCard(watch) {
 
 async function loadList() {
   try {
-    const url = new URL('/loblaws/watches', window.location.origin);
-    if (initialTokens) {
-      url.searchParams.set('token', initialTokens);
-    }
-    const data = await fetchJson(url.toString(), { headers: authHeaders });
+    const data = await fetchJson('/loblaws/watches');
     const rawList = Array.isArray(data) ? [...data] : [];
     if (!form) {
       const deduped = new Map();
@@ -285,7 +260,7 @@ if (form && urlInput) {
     try {
       await fetchJson('/loblaws/watches', {
         method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       setFormFeedback('已刷新最新信息', 'success');
@@ -305,11 +280,7 @@ if (refreshAllBtn) {
     refreshAllBtn.disabled = true;
     refreshAllBtn.textContent = '刷新中…';
     try {
-      const url = new URL('/loblaws/watches/refresh', window.location.origin);
-      if (initialTokens) {
-        url.searchParams.set('token', initialTokens);
-      }
-      await fetchJson(url.toString(), { method: 'POST', headers: authHeaders });
+      await fetchJson('/loblaws/watches/refresh', { method: 'POST' });
       await loadList();
     } catch (err) {
       console.error(err);
@@ -323,24 +294,7 @@ if (refreshAllBtn) {
 }
 
 if (manageLink) {
-  const manageUrl = new URL(manageLink.href, window.location.origin);
-  if (initialTokens) {
-    manageUrl.searchParams.set('token', initialTokens);
-    manageLink.href = manageUrl.toString();
-  } else {
-    manageLink.addEventListener('click', async (event) => {
-      event.preventDefault();
-      const password = window.prompt('请输入访问密码');
-      if (!password) return;
-      try {
-        const hash = await sha256Hex(password);
-        manageUrl.searchParams.set('token', hash);
-        window.location.href = manageUrl.toString();
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  }
+  manageLink.href = new URL(manageLink.href, window.location.origin).toString();
 }
 
 loadList().catch((err) => console.error(err));

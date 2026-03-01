@@ -1,4 +1,3 @@
-import hashlib
 import os
 import socket
 import threading
@@ -186,7 +185,6 @@ def test_json_viewer_modal_hidden_and_render(page, base_url):
 
 @pytest.mark.e2e
 def test_loblaws_board_and_manage_views(page, base_url):
-    os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
     _seed_loblaws_watch()
 
     page.goto(f"{base_url}/board", wait_until="domcontentloaded")
@@ -201,10 +199,7 @@ def test_loblaws_board_and_manage_views(page, base_url):
     assert page.locator(".board-header__manage").is_visible()
     assert page.locator(".watch-card__action--delete").count() == 0
 
-    hash_value = hashlib.sha256(b"secret").hexdigest()
-    os.environ["PRIVATE_PAGE_PASSWORD_HASH"] = hash_value
-
-    page.goto(f"{base_url}/board/manage?token={hash_value}", wait_until="domcontentloaded")
+    page.goto(f"{base_url}/board/manage", wait_until="domcontentloaded")
     page.wait_for_selector("#watch-form")
 
     assert page.locator("#watch-form").is_visible()
@@ -213,7 +208,6 @@ def test_loblaws_board_and_manage_views(page, base_url):
 
     with session_scope() as session:
         session.query(models.LoblawsWatch).delete()
-    os.environ.pop("PRIVATE_PAGE_PASSWORD_HASH", None)
 
 
 @pytest.mark.e2e
