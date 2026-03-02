@@ -12,7 +12,8 @@
     }
 
     @triggertodo_frontend path /static/todo /static/todo/*
-    handle_path @triggertodo_frontend {
+    handle @triggertodo_frontend {
+        uri strip_prefix /static/todo
         reverse_proxy backend:8001
     }
 
