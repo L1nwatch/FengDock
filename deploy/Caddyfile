@@ -11,6 +11,16 @@
         reverse_proxy backend:8001
     }
 
+    @triggertodo_frontend path /static/todo /static/todo/*
+    handle_path @triggertodo_frontend {
+        reverse_proxy backend:8001
+    }
+
+    @triggertodo_assets path /assets/*
+    handle @triggertodo_assets {
+        reverse_proxy backend:8001
+    }
+
     handle /api/* {
         reverse_proxy backend:8000
     }

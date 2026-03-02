@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1
 
+FROM node:20-alpine AS triggertodo_frontend_builder
+
+WORKDIR /app/vendor/TriggerToDo/frontend
+
+COPY vendor/TriggerToDo/frontend/package*.json ./
+RUN npm ci
+
+COPY vendor/TriggerToDo/frontend ./
+RUN npm run build
+
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -42,6 +52,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 COPY app ./app
 COPY --from=builder /app/vendor/TriggerToDo/.venv ./vendor/TriggerToDo/.venv
 COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
+COPY --from=triggertodo_frontend_builder /app/vendor/TriggerToDo/frontend/dist ./vendor/TriggerToDo/frontend/dist
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
