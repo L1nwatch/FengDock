@@ -11,6 +11,8 @@ services:
       TRIGGER_ENGINE_INTERVAL_SECONDS: ${TRIGGERTODO_TRIGGER_ENGINE_INTERVAL_SECONDS:-30}
     volumes:
       - backend_db:/app/data
+      - ./scripts/run_servers.py:/app/scripts/run_servers.py:ro
+      - ./deploy/codex_proxy_with_interception.py:/app/codex_proxy_with_interception.py:ro
     networks:
       - fengdock
 
@@ -24,13 +26,14 @@ services:
       CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
     ports:
       - "80:80"
-      - "443:443"
+      - "8443:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/www/index.html:ro
       - ./tools:/srv/www/tools:ro
       - caddy_data:/data
       - caddy_config:/config
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
     networks:
       - fengdock
 

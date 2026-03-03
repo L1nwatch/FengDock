@@ -1,4 +1,4 @@
-"""Run FengDock and TriggerToDo backends in one container."""
+"""Run FengDock, TriggerToDo, and codex proxy backends in one container."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 import time
 
 
-def _spawn() -> tuple[subprocess.Popen[bytes], subprocess.Popen[bytes]]:
+def _spawn() -> list[subprocess.Popen[bytes]]:
     fengdock = subprocess.Popen(
         [
             "/app/.venv/bin/uvicorn",
@@ -36,7 +36,21 @@ def _spawn() -> tuple[subprocess.Popen[bytes], subprocess.Popen[bytes]]:
         cwd="/app/vendor/TriggerToDo",
         env=env,
     )
-    return fengdock, triggertodo
+
+    codex_proxy = subprocess.Popen(
+        [
+            "/app/.venv/bin/uvicorn",
+            "codex_proxy_with_interception:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8002",
+            "--app-dir",
+            "/app",
+        ],
+        cwd="/app",
+    )
+    return [fengdock, triggertodo, codex_proxy]
 
 
 def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:
@@ -54,8 +68,7 @@ def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:
 
 
 def main() -> int:
-    fengdock, triggertodo = _spawn()
-    processes = [fengdock, triggertodo]
+    processes = _spawn()
     stopping = False
 
     def on_signal(_signum: int, _frame: object) -> None:

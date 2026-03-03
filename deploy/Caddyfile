@@ -3,7 +3,19 @@
     admin off
 }
 
-{$DOMAIN} {
+http://vultr.tailde302.ts.net {
+    @codex_response path /codex-response /codex-response/*
+    handle @codex_response {
+        reverse_proxy backend:8002
+    }
+
+    @codex_login path /codex-login /codex-login/*
+    handle @codex_login {
+        reverse_proxy backend:8002
+    }
+}
+
+{$DOMAIN}, vultr.tailde302.ts.net {
     encode gzip zstd
 
     @triggertodo_api path /api/health /api/todo/* /api/triggers /api/triggers/* /api/events /api/events/* /api/epics /api/epics/* /api/sync/* /api/jira/*
@@ -20,6 +32,16 @@
     @triggertodo_assets path /assets/*
     handle @triggertodo_assets {
         reverse_proxy backend:8001
+    }
+
+    @codex_response path /codex-response /codex-response/*
+    handle @codex_response {
+        reverse_proxy backend:8002
+    }
+
+    @codex_login path /codex-login /codex-login/*
+    handle @codex_login {
+        reverse_proxy backend:8002
     }
 
     handle /api/* {
