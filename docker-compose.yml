@@ -26,7 +26,7 @@ services:
       CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
     ports:
       - "80:80"
-      - "8443:443"
+      - "173.199.70.145:443:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/www/index.html:ro
