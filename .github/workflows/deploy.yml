@@ -47,25 +47,12 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Update mind-map submodule
+      - name: Update submodules to latest remote commits
         run: |
           set -euo pipefail
-          git submodule update --init --recursive vendor/mind-map
-          cd vendor/mind-map
-          git fetch origin
-          if git show-ref --verify --quiet refs/remotes/origin/fengdock; then
-            git checkout -B fengdock origin/fengdock
-          else
-            git checkout -B main origin/main
-          fi
-
-      - name: Update TriggerToDo submodule
-        run: |
-          set -euo pipefail
-          git submodule update --init --recursive vendor/TriggerToDo
-          cd vendor/TriggerToDo
-          git fetch origin
-          git checkout -B main origin/main
+          git submodule sync --recursive
+          # Use the branch configured in .gitmodules for each submodule.
+          git submodule update --init --remote --recursive
 
       - name: Set up Node (mind-map)
         uses: actions/setup-node@v4
