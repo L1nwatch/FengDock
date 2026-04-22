@@ -6,3 +6,6 @@
 	path = vendor/TriggerToDo
 	url = https://github.com/L1nwatch/TriggerToDo.git
 	branch = main
+[submodule "vendor/fire"]
+	path = vendor/fire
+	url = https://github.com/L1nwatch/fire.git
