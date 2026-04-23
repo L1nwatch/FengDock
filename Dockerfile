@@ -10,6 +10,16 @@ RUN npm ci
 COPY vendor/TriggerToDo/frontend ./
 RUN npm run build
 
+FROM node:20-alpine AS fire_frontend_builder
+
+WORKDIR /app/vendor/fire/frontend
+
+COPY vendor/fire/frontend/package*.json ./
+RUN npm ci
+
+COPY vendor/fire/frontend ./
+RUN VITE_API_BASE=/fire npm run build -- --base=/fire/
+
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -33,6 +43,7 @@ RUN cd /app/vendor/TriggerToDo && UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen 
 
 COPY app ./app
 COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
+COPY vendor/fire/app ./vendor/fire/app
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
@@ -53,6 +64,8 @@ COPY app ./app
 COPY --from=builder /app/vendor/TriggerToDo/.venv ./vendor/TriggerToDo/.venv
 COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY --from=triggertodo_frontend_builder /app/vendor/TriggerToDo/frontend/dist ./vendor/TriggerToDo/frontend/dist
+COPY vendor/fire/app ./vendor/fire/app
+COPY --from=fire_frontend_builder /app/vendor/fire/frontend/dist ./vendor/fire/frontend/dist
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools

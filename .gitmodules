@@ -9,3 +9,4 @@
 [submodule "vendor/fire"]
 	path = vendor/fire
 	url = https://github.com/L1nwatch/fire.git
+	branch = main

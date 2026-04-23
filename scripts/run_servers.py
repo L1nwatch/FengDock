@@ -50,7 +50,21 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         ],
         cwd="/app",
     )
-    return [fengdock, triggertodo, codex_proxy]
+    fire_env = os.environ.copy()
+    fire_env["PYTHONPATH"] = "/app/vendor/fire"
+    fire_app = subprocess.Popen(
+        [
+            "/app/.venv/bin/uvicorn",
+            "app.main:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8003",
+        ],
+        cwd="/app/vendor/fire",
+        env=fire_env,
+    )
+    return [fengdock, triggertodo, codex_proxy, fire_app]
 
 
 def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:

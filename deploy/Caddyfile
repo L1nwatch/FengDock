@@ -44,6 +44,15 @@ http://vultr.tailde302.ts.net {
         reverse_proxy backend:8002
     }
 
+    @fire_app path /fire /fire/*
+    handle @fire_app {
+        uri strip_prefix /fire
+        reverse_proxy backend:8003
+    }
+
+    @legacy_fire path /static/fire /static/fire/ /static/fire/index.html
+    redir @legacy_fire /fire/dashboard 308
+
     handle /api/* {
         reverse_proxy backend:8000
     }

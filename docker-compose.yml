@@ -11,6 +11,7 @@ services:
       TRIGGER_ENGINE_INTERVAL_SECONDS: ${TRIGGERTODO_TRIGGER_ENGINE_INTERVAL_SECONDS:-30}
     volumes:
       - backend_db:/app/data
+      - backend_db:/app/vendor/fire/data
       - ./scripts/run_servers.py:/app/scripts/run_servers.py:ro
       - ./deploy/codex_proxy_with_interception.py:/app/codex_proxy_with_interception.py:ro
     networks:
