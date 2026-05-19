@@ -18,7 +18,7 @@ http://vultr.tailde302.ts.net {
 {$DOMAIN}, vultr.tailde302.ts.net {
     encode gzip zstd
 
-    @triggertodo_api path /api/health /api/todo/* /api/triggers /api/triggers/* /api/events /api/events/* /api/epics /api/epics/* /api/sync/* /api/jira/*
+    @triggertodo_api path /api/health /api/todo/* /api/triggers /api/triggers/* /api/events /api/events/* /api/epics /api/epics/* /api/milestones /api/milestones/* /api/sync/* /api/jira/*
     handle @triggertodo_api {
         reverse_proxy backend:8001
     }
