@@ -131,6 +131,21 @@ a {
   color: #f1f5f6;
 }
 
+.periodic-element--placeholder {
+  cursor: default;
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+.periodic-element--placeholder:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.periodic-element--placeholder:hover:after {
+  opacity: 0;
+}
+
 .social-media {
   --card-gradient: linear-gradient(145deg, #f3f9a6 0%, #cbc634 100%);
   --gradient-duration: 18s;

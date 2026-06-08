@@ -26,6 +26,7 @@ DEFAULT_STORE_ID = os.getenv("LOBLAWS_DEFAULT_STORE", "1032")
 DEFAULT_BANNER = os.getenv("LOBLAWS_BANNER", "loblaw")
 DEFAULT_LANG = os.getenv("LOBLAWS_LANG", "en")
 DEFAULT_PICKUP = os.getenv("LOBLAWS_PICKUP_TYPE", "STORE")
+PROXY_URL = os.getenv("LOBLAWS_PROXY_URL")
 
 try:
     TORONTO_TZ = ZoneInfo("America/Toronto")
@@ -81,8 +82,11 @@ def _build_headers() -> dict[str, str]:
     return {
         "x-apikey": API_KEY,
         "accept": "application/json, text/plain, */*",
+        "accept-language": "en-CA,en;q=0.9",
+        "origin": "https://www.loblaws.ca",
         "user-agent": _USER_AGENT,
         "referer": "https://www.loblaws.ca/",
+        "site-banner": DEFAULT_BANNER,
     }
 
 
@@ -102,7 +106,7 @@ async def fetch_product_payload(
     url = f"{API_BASE}/v1/products/{product_code}"
     close_client = False
     if client is None:
-        client = httpx.AsyncClient(timeout=15)
+        client = httpx.AsyncClient(timeout=15, proxy=PROXY_URL)
         close_client = True
     try:
         response = await client.get(url, params=params, headers=_build_headers())
@@ -119,7 +123,7 @@ async def refresh_watch_ids(watch_ids: Optional[Iterable[int]] = None) -> List[i
         return []
 
     snapshots: List[ProductSnapshot] = []
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, proxy=PROXY_URL) as client:
         for target in targets:
             try:
                 payload = await fetch_product_payload(
@@ -141,6 +145,14 @@ async def refresh_watch_ids(watch_ids: Optional[Iterable[int]] = None) -> List[i
                 await asyncio.sleep(0.2)  # polite pacing
 
     updated_ids = await asyncio.to_thread(_apply_snapshots, snapshots)
+    failed_count = sum(1 for snapshot in snapshots if not snapshot.ok)
+    if failed_count:
+        logger.warning(
+            "Loblaws refresh failed for %d/%d products; applied %d successful payloads",
+            failed_count,
+            len(snapshots),
+            len(updated_ids),
+        )
     return updated_ids
 
 
@@ -223,8 +235,6 @@ def _apply_snapshots(snapshots: List[ProductSnapshot]) -> List[int]:
             watch = session.get(models.LoblawsWatch, snapshot.watch_id)
             if not watch:
                 continue
-            watch.last_checked_at = now
-            updated_ids.append(watch.id)
 
             if not snapshot.ok:
                 logger.debug(
@@ -233,6 +243,8 @@ def _apply_snapshots(snapshots: List[ProductSnapshot]) -> List[int]:
                 continue
 
             payload = snapshot.payload or {}
+            watch.last_checked_at = now
+            updated_ids.append(watch.id)
             offer = _select_primary_offer(payload)
             price_block = (offer or {}).get("price") or {}
             was_price_block = (offer or {}).get("wasPrice") or {}

@@ -18,6 +18,7 @@ let loadingAll = false;
 
 function getSaleLabel(item) {
   if (!item) return null;
+  if (isSaleExpired(item)) return null;
   if (item.sale_text && item.sale_text.trim()) return item.sale_text.trim();
   if (item.sale_badge_name && String(item.sale_badge_name).trim()) {
     return String(item.sale_badge_name).trim();
@@ -27,6 +28,12 @@ function getSaleLabel(item) {
 
 function hasActiveSale(item) {
   return Boolean(getSaleLabel(item));
+}
+
+function isSaleExpired(item) {
+  if (!item || !item.sale_expiry) return false;
+  const expiry = toTimestamp(item.sale_expiry);
+  return expiry > 0 && expiry < Date.now();
 }
 
 function toTimestamp(value) {
@@ -111,7 +118,7 @@ function renderWatchCard(watch) {
     saleEl.classList.remove('watch-card__sale--inactive');
     saleEl.classList.add('watch-card__sale--active');
   } else {
-    saleEl.textContent = '暂无促销';
+    saleEl.textContent = isSaleExpired(watch) ? '促销已过期' : '暂无促销';
     saleEl.classList.remove('watch-card__sale--active');
     saleEl.classList.add('watch-card__sale--inactive');
   }

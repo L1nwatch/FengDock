@@ -124,6 +124,41 @@ def test_refresh_watch_updates_sale(monkeypatch, client):
     assert data["sale_expiry"].startswith("2025-12-10")
 
 
+def test_refresh_failure_keeps_existing_checked_timestamp(monkeypatch, client):
+    _install_fake_payload(monkeypatch, [SAMPLE_PAYLOAD_V1.copy()])
+
+    create_response = client.post("/loblaws/watches", json={"url": SAMPLE_URL})
+    watch_id = create_response.json()["id"]
+    original_checked_at = create_response.json()["last_checked_at"]
+
+    async def _failing_fetch(product_code: str, *, store_id=None, client=None):
+        raise RuntimeError("blocked")
+
+    monkeypatch.setattr(loblaws, "fetch_product_payload", _failing_fetch)
+
+    refresh_response = client.post(f"/loblaws/watches/{watch_id}/refresh")
+    assert refresh_response.status_code == 502
+
+    get_response = client.get(f"/loblaws/watches/{watch_id}")
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert data["last_checked_at"] == original_checked_at
+    assert data["sale_text"] == "SAVE $0.39"
+
+
+def test_refresh_all_failure_returns_bad_gateway(monkeypatch, client):
+    _install_fake_payload(monkeypatch, [SAMPLE_PAYLOAD_V1.copy()])
+    client.post("/loblaws/watches", json={"url": SAMPLE_URL})
+
+    async def _failing_fetch(product_code: str, *, store_id=None, client=None):
+        raise RuntimeError("blocked")
+
+    monkeypatch.setattr(loblaws, "fetch_product_payload", _failing_fetch)
+
+    refresh_response = client.post("/loblaws/watches/refresh")
+    assert refresh_response.status_code == 502
+
+
 def test_board_pages_render(client):
     board = client.get("/board")
     assert board.status_code == 200

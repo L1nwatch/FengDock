@@ -91,9 +91,14 @@ async def refresh_watch_endpoint(
     _auth: None = Depends(require_manage_auth),
 ) -> schemas.LoblawsWatchRead:
     updated = await refresh_single_watch(watch_id)
-    if updated is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watch not found")
     watch = crud.get_loblaws_watch(session, watch_id)
+    if not watch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watch not found")
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to refresh product from Loblaws",
+        )
     session.refresh(watch)
     return _serialize_watch(watch)
 
@@ -107,8 +112,13 @@ async def refresh_all_endpoint(
     session: Session = Depends(get_session),
     _auth: None = Depends(require_manage_auth),
 ) -> List[schemas.LoblawsWatchRead]:
-    await refresh_all_watches()
     watches = crud.list_loblaws_watches(session)
+    updated = await refresh_all_watches()
+    if watches and not updated:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to refresh products from Loblaws",
+        )
     for watch in watches:
         session.refresh(watch)
     return [_serialize_watch(watch) for watch in watches]

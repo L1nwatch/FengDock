@@ -7,8 +7,24 @@
         <link rel="stylesheet" href="/static/articles/Poppins.css">
     <link rel="stylesheet" href="/static/homepage/reset.min.css">
     <link rel="stylesheet" href="/static/homepage/simple-line-icons.min.css">
-    <link rel="stylesheet" href="/static/homepage/style.css?v=20260305124500">
+    <link rel="stylesheet" href="/static/homepage/style.css?v=20260608232000">
     <link rel="shortcut icon" href="/static/favicon.ico">
+    <style>
+        .periodic-element--placeholder {
+            cursor: default;
+            filter: grayscale(1);
+            opacity: 0.4;
+        }
+
+        .periodic-element--placeholder:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .periodic-element--placeholder:hover:after {
+            opacity: 0;
+        }
+    </style>
 
 </head>
 <body>
@@ -69,16 +85,13 @@
         </div>
     </a>
 
-    <a class="periodic-element intense-work"
-       data-description="Loblaws dashboard"
-       href="/board"
-       target="_blank"
-    >
+    <div class="periodic-element periodic-element--placeholder intense-work"
+         data-description="Loblaws dashboard disabled">
         <div class="periodic-element-inner">
             <div class="title"><i class="icon-basket-loaded icons"></i></div>
             <div class="description">Loblaws</div>
         </div>
-    </a>
+    </div>
 
     <a class="periodic-element just-trying"
        data-description="个人笔记库主页"
@@ -362,6 +375,10 @@
 
   cards.forEach((card, index) => {
     card.dataset.originalIndex = String(index);
+    if (card.classList.contains('periodic-element--placeholder')) {
+      card.dataset.linkUrl = '';
+      return;
+    }
     try {
       card.dataset.linkUrl = new URL(card.getAttribute('href') || '', window.location.origin).href;
     } catch (err) {
@@ -450,7 +467,7 @@
     'click',
     (event) => {
       const card = event.target.closest('.periodic-element');
-      if (!card || !card.dataset.linkUrl) return;
+      if (!card || card.classList.contains('periodic-element--placeholder') || !card.dataset.linkUrl) return;
       const stats = rankMap.get(card.dataset.linkUrl) || {
         index: Number(card.dataset.originalIndex),
         count: Number(card.dataset.clickCount || '0'),
