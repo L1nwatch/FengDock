@@ -80,7 +80,7 @@ def _seed_loblaws_watch() -> None:
                     price_unit="ea",
                     regular_price=7.14,
                     sale_text="SAVE $0.39",
-                    sale_expiry=datetime(2025, 12, 3, tzinfo=timezone.utc),
+                    sale_expiry=now + timedelta(days=14),
                     stock_status="IN_STOCK",
                     last_checked_at=now,
                     last_change_at=now,
