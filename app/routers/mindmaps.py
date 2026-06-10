@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from .. import crud, schemas
-from ..auth import require_manage_auth
 from ..database import get_session
 
 router = APIRouter(prefix="/mindmaps", tags=["mindmaps"])
@@ -34,7 +33,6 @@ def _serialize_doc(doc: object) -> schemas.MindMapDocRead:
 @router.get("/", response_model=List[schemas.MindMapDocListItem])
 def list_docs(
     session: Session = Depends(get_session),
-    _auth: None = Depends(require_manage_auth),
 ) -> List[schemas.MindMapDocListItem]:
     docs = crud.list_mindmap_docs(session)
     return [
@@ -52,7 +50,6 @@ def list_docs(
 def get_doc(
     doc_id: int,
     session: Session = Depends(get_session),
-    _auth: None = Depends(require_manage_auth),
 ) -> schemas.MindMapDocRead:
     doc = crud.get_mindmap_doc(session, doc_id)
     if not doc:
@@ -64,7 +61,6 @@ def get_doc(
 def create_doc(
     payload: schemas.MindMapDocCreate,
     session: Session = Depends(get_session),
-    _auth: None = Depends(require_manage_auth),
 ) -> schemas.MindMapDocRead:
     doc = crud.create_mindmap_doc(session, payload)
     return _serialize_doc(doc)
@@ -75,7 +71,6 @@ def update_doc(
     doc_id: int,
     payload: schemas.MindMapDocUpdate,
     session: Session = Depends(get_session),
-    _auth: None = Depends(require_manage_auth),
 ) -> schemas.MindMapDocRead:
     doc = crud.get_mindmap_doc(session, doc_id)
     if not doc:
@@ -103,7 +98,6 @@ def update_doc(
 def delete_doc(
     doc_id: int,
     session: Session = Depends(get_session),
-    _auth: None = Depends(require_manage_auth),
 ) -> None:
     doc = crud.get_mindmap_doc(session, doc_id)
     if not doc:
