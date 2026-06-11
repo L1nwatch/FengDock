@@ -1,4 +1,3 @@
-import os
 import socket
 import threading
 import time
@@ -13,7 +12,6 @@ from app.database import session_scope
 from app import models
 
 SERVER_HOST = "127.0.0.1"
-SAMPLE_WATCH_URL = "https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA?source=nspt"
 GITHUB_URL = "https://github.com/L1nwatch"
 NOTION_URL = "https://watch0.notion.site/"
 ANKI_URL = "https://anki.watch0.top/"
@@ -61,48 +59,6 @@ def page(browser_context):
     page = browser_context.new_page()
     yield page
     page.close()
-
-
-def _seed_loblaws_watch() -> None:
-    now = datetime.now(timezone.utc)
-    with session_scope() as session:
-        session.query(models.LoblawsWatch).delete()
-        session.add_all(
-            [
-                models.LoblawsWatch(
-                    url=SAMPLE_WATCH_URL,
-                    product_code="20077874001_EA",
-                    store_id="1032",
-                    name="Natrel Lactose Free 2%",
-                    brand="Natrel",
-                    image_url="https://example.com/sample.png",
-                    current_price=6.75,
-                    price_unit="ea",
-                    regular_price=7.14,
-                    sale_text="SAVE $0.39",
-                    sale_expiry=now + timedelta(days=14),
-                    stock_status="IN_STOCK",
-                    last_checked_at=now,
-                    last_change_at=now,
-                ),
-                models.LoblawsWatch(
-                    url="https://www.loblaws.ca/en/lactose-free-2-dairy-product/p/20077874001_EA",
-                    product_code="20077874001_EA",
-                    store_id="1032",
-                    name="Natrel Lactose Free 2%",
-                    brand="Natrel",
-                    image_url="https://example.com/sample.png",
-                    current_price=6.99,
-                    price_unit="ea",
-                    regular_price=7.14,
-                    sale_text=None,
-                    sale_expiry=None,
-                    stock_status="IN_STOCK",
-                    last_checked_at=now,
-                    last_change_at=now,
-                ),
-            ]
-        )
 
 
 def _seed_links_for_home() -> None:
@@ -181,33 +137,6 @@ def test_json_viewer_modal_hidden_and_render(page, base_url):
     page.click(".fd-modal__close")
     is_hidden_again = page.eval_on_selector("#modal", "el => el.hasAttribute('hidden')")
     assert is_hidden_again
-
-
-@pytest.mark.e2e
-def test_loblaws_board_and_manage_views(page, base_url):
-    _seed_loblaws_watch()
-
-    page.goto(f"{base_url}/board", wait_until="domcontentloaded")
-    page.wait_for_selector(".watch-card__title")
-
-    titles = page.locator(".watch-card__title").all_inner_texts()
-    assert any("Natrel" in title for title in titles)
-    assert page.locator(".watch-card__title").count() == 1
-    sale_text = page.locator(".watch-card__sale").first.inner_text()
-    assert "SAVE" in sale_text
-
-    assert page.locator(".board-header__manage").is_visible()
-    assert page.locator(".watch-card__action--delete").count() == 0
-
-    page.goto(f"{base_url}/board/manage", wait_until="domcontentloaded")
-    page.wait_for_selector("#watch-form")
-
-    assert page.locator("#watch-form").is_visible()
-    assert page.locator(".watch-card__action--delete").count() >= 1
-    assert page.locator(".watch-card__title").count() == 2
-
-    with session_scope() as session:
-        session.query(models.LoblawsWatch).delete()
 
 
 @pytest.mark.e2e

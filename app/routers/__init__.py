@@ -1,5 +1,5 @@
 """API routers."""
 
-from . import links, loblaws
+from . import links, mindmaps
 
-__all__ = ["links", "loblaws"]
+__all__ = ["links", "mindmaps"]
