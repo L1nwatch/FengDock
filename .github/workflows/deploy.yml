@@ -54,18 +54,6 @@ jobs:
           # Use the branch configured in .gitmodules for each submodule.
           git submodule update --init --remote --recursive
 
-      - name: Build CELPIP preview assets
-        run: |
-          set -euo pipefail
-          ROOT="$GITHUB_WORKSPACE"
-          cd "$ROOT/vendor/celpip-exam-simulation"
-          uv sync --frozen
-          uv run python scripts/build_pages_preview.py
-          rm -rf "$ROOT/static/celpip"
-          mkdir -p "$ROOT/static/celpip"
-          cp -R "$ROOT/vendor/celpip-exam-simulation/build/pages-preview/"* "$ROOT/static/celpip/"
-          cp "$ROOT/vendor/celpip-exam-simulation/build/pages-preview/.nojekyll" "$ROOT/static/celpip/.nojekyll"
-
       - name: Set up Node (mind-map)
         uses: actions/setup-node@v4
         with:
@@ -155,6 +143,8 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
             git fetch --all --prune
             git reset --hard origin/main
+            git submodule sync --recursive
+            git submodule update --init --recursive
             docker compose pull
             docker compose up -d --remove-orphans
             docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile || docker compose up -d --force-recreate caddy

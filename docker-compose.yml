@@ -9,9 +9,14 @@ services:
       SESSION_SECRET_KEY: ${TRIGGERTODO_SESSION_SECRET_KEY:-dev-secret-change-me}
       SESSION_COOKIE_NAME: ${TRIGGERTODO_SESSION_COOKIE_NAME:-triggertodo_session}
       TRIGGER_ENGINE_INTERVAL_SECONDS: ${TRIGGERTODO_TRIGGER_ENGINE_INTERVAL_SECONDS:-30}
+      CELPIP_DATA_DIR: /app/data/celpip
+      CELPIP_HOST: 0.0.0.0
+      CELPIP_PORT: 8004
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - backend_db:/app/data
       - backend_db:/app/vendor/fire/data
+      - ./vendor/celpip-exam-simulation/materials/private/packs:/app/vendor/celpip-exam-simulation/materials/private/packs:ro
       - ./scripts/run_servers.py:/app/scripts/run_servers.py:ro
       - ./deploy/codex_proxy_with_interception.py:/app/codex_proxy_with_interception.py:ro
     networks:

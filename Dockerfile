@@ -44,6 +44,8 @@ RUN cd /app/vendor/TriggerToDo && UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen 
 COPY app ./app
 COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY vendor/fire/app ./vendor/fire/app
+COPY vendor/celpip-exam-simulation/server.py ./vendor/celpip-exam-simulation/server.py
+COPY vendor/celpip-exam-simulation/webapp ./vendor/celpip-exam-simulation/webapp
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
@@ -66,6 +68,9 @@ COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY --from=triggertodo_frontend_builder /app/vendor/TriggerToDo/frontend/dist ./vendor/TriggerToDo/frontend/dist
 COPY vendor/fire/app ./vendor/fire/app
 COPY --from=fire_frontend_builder /app/vendor/fire/frontend/dist ./vendor/fire/frontend/dist
+COPY vendor/celpip-exam-simulation/server.py ./vendor/celpip-exam-simulation/server.py
+COPY vendor/celpip-exam-simulation/webapp ./vendor/celpip-exam-simulation/webapp
+RUN mkdir -p ./vendor/celpip-exam-simulation/materials/private/packs
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
@@ -74,4 +79,5 @@ COPY pyproject.toml uv.lock ./
 
 EXPOSE 8000
 EXPOSE 8001
+EXPOSE 8004
 CMD ["python", "scripts/run_servers.py"]

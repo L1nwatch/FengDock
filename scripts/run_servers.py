@@ -1,4 +1,4 @@
-"""Run FengDock, TriggerToDo, and codex proxy backends in one container."""
+"""Run FengDock and bundled app backends in one container."""
 
 from __future__ import annotations
 
@@ -64,7 +64,19 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         cwd="/app/vendor/fire",
         env=fire_env,
     )
-    return [fengdock, triggertodo, codex_proxy, fire_app]
+    celpip_env = os.environ.copy()
+    celpip_env["CELPIP_HOST"] = "0.0.0.0"
+    celpip_env["CELPIP_PORT"] = "8004"
+    celpip_env.setdefault("CELPIP_DATA_DIR", "/app/data/celpip")
+    celpip_app = subprocess.Popen(
+        [
+            "/app/.venv/bin/python",
+            "server.py",
+        ],
+        cwd="/app/vendor/celpip-exam-simulation",
+        env=celpip_env,
+    )
+    return [fengdock, triggertodo, codex_proxy, fire_app, celpip_app]
 
 
 def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:

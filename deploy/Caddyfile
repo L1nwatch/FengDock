@@ -53,6 +53,28 @@ http://vultr.tailde302.ts.net {
     @legacy_fire path /static/fire /static/fire/ /static/fire/index.html
     redir @legacy_fire /fire/dashboard 308
 
+    @celpip_root path /celpip /celpip/
+    redir @celpip_root /celpip/webapp/index.html?view=overview 308
+
+    @celpip_app path /celpip /celpip/*
+    handle @celpip_app {
+        uri strip_prefix /celpip
+        reverse_proxy backend:8004
+    }
+
+    @celpip_recordings path /webapp/recordings/*
+    handle @celpip_recordings {
+        reverse_proxy backend:8004
+    }
+
+    @celpip_api path /api/submissions /api/drafts /api/recordings /api/writing-assessments
+    handle @celpip_api {
+        reverse_proxy backend:8004
+    }
+
+    @legacy_celpip path /static/celpip /static/celpip/*
+    redir @legacy_celpip /celpip/webapp/index.html?view=overview 308
+
     handle /api/* {
         reverse_proxy backend:8000
     }
