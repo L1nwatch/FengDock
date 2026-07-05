@@ -25,3 +25,4 @@ def test_homepage_links_json_tool():
     assert response.status_code == 200
     assert "/tools/json-viewer" in response.text
     assert "/static/todo/board/waiting-trigger" in response.text
+    assert "/static/celpip/index.html" in response.text

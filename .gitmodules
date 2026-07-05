@@ -10,3 +10,7 @@
 	path = vendor/fire
 	url = https://github.com/L1nwatch/fire.git
 	branch = main
+[submodule "vendor/celpip-exam-simulation"]
+	path = vendor/celpip-exam-simulation
+	url = https://github.com/L1nwatch/celpip-exam-simulation.git
+	branch = main
