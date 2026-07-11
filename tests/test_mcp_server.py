@@ -81,6 +81,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert login_page.status_code == 200
         assert 'name="password"' in login_page.text
         assert 'name="username"' not in login_page.text
+        assert "form-action 'self' https://chatgpt.com" in login_page.headers["content-security-policy"]
 
         login = client.post(
             "/login/callback",

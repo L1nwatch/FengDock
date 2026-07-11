@@ -12,6 +12,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl
 from starlette.exceptions import HTTPException
@@ -139,11 +140,18 @@ class PersistentOAuthProvider:
     async def get_login_page(self, nonce: str) -> HTMLResponse:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT 1 FROM oauth_states WHERE nonce = ? AND expires_at >= ?",
+                "SELECT payload FROM oauth_states WHERE nonce = ? AND expires_at >= ?",
                 (nonce, int(time.time())),
             ).fetchone()
         if not row:
             raise HTTPException(400, "Authorization request expired or invalid")
+        redirect_uri = urlsplit(json.loads(row["payload"])["redirect_uri"])
+        redirect_host = redirect_uri.hostname or ""
+        if ":" in redirect_host:
+            redirect_host = f"[{redirect_host}]"
+        if redirect_uri.port:
+            redirect_host = f"{redirect_host}:{redirect_uri.port}"
+        redirect_origin = f"{redirect_uri.scheme}://{redirect_host}"
         disabled = " disabled" if not self.password else ""
         message = (
             "Enter the FengDock MCP credentials."
@@ -165,7 +173,10 @@ button{{margin-top:22px;padding:11px 18px;border:0;border-radius:8px;background:
             content,
             headers={
                 "Cache-Control": "no-store",
-                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'",
+                "Content-Security-Policy": (
+                    "default-src 'none'; style-src 'unsafe-inline'; "
+                    f"form-action 'self' {redirect_origin}; base-uri 'none'; frame-ancestors 'none'"
+                ),
                 "X-Frame-Options": "DENY",
                 "X-Content-Type-Options": "nosniff",
             },
