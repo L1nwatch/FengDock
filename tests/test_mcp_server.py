@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
 import sys
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from starlette.testclient import TestClient
+
+from mcp.server.fastmcp.exceptions import ToolError
 
 
 def _load_mcp_app(tmp_path, monkeypatch):
@@ -142,6 +147,13 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         tools = listed.json()["result"]["tools"]
         assert len(tools) == 11
         assert {tool["name"] for tool in tools} >= {"search_todos", "get_finance_overview"}
+        schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools}
+        assert schemas["list_scrums"]["status"]["default"] == "active"
+        assert schemas["list_scrums"]["include_tasks"]["default"] is False
+        assert schemas["list_scrums"]["limit"]["default"] == 5
+        assert schemas["search_todos"]["include_details"]["default"] is False
+        assert schemas["get_finance_overview"]["months_limit"]["default"] == 1
+        assert schemas["get_investments"]["snapshot_limit"]["default"] == 1
 
 
 def test_finance_results_default_to_latest_month_and_bounded_entries(tmp_path, monkeypatch):
@@ -194,3 +206,132 @@ def test_snapshot_results_support_dates_and_limits(tmp_path, monkeypatch):
     }
     assert result["snapshots"][0]["items"] == [{"id": "a"}]
     assert result["snapshots"][0]["resultInfo"] == {"availableItems": 2, "returnedItems": 1}
+
+
+def test_trigger_tools_default_to_bounded_summaries(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        module,
+        "_read_todo_lists",
+        lambda: {
+            "count": 2,
+            "items": [
+                {"id": "list-1", "displayName": "Work"},
+                {"id": "list-2", "displayName": "Home"},
+            ],
+        },
+    )
+    responses = {
+        "/api/todo/cache/tasks": {
+            "items": [
+                {
+                    "listId": "list-1",
+                    "taskId": "task-1",
+                    "title": "Ship MCP",
+                    "bodyContent": "private details",
+                    "recurrenceJson": "{}",
+                    "status": "notStarted",
+                }
+            ]
+        },
+        "/api/triggers": {"items": [{"id": 1, "enabled": True}, {"id": 2, "enabled": False}]},
+        "/api/events": {"items": [{"id": 1, "is_active": True}, {"id": 2, "is_active": False}]},
+        "/api/epics": {"items": [{"id": 1, "status": "active"}, {"id": 2, "status": "completed"}]},
+        "/api/milestones": {
+            "items": [
+                {
+                    "id": 1,
+                    "milestone_at": "2026-07-20",
+                    "summary": {"epics": 1, "tasks": 1, "scrums": 1},
+                    "epic_keys": ["EPIC-1"],
+                    "task_ids": ["task-1"],
+                    "scrum_ids": ["1"],
+                    "epics": [{"epic_key": "EPIC-1"}],
+                    "tasks": [{"task_id": "task-1"}],
+                    "scrums": [{"id": 1}],
+                }
+            ]
+        },
+        "/api/scrums/active": {
+            "item": {
+                "id": 1,
+                "status": "active",
+                "summary": {"items": 2},
+                "items": [{"id": 1}, {"id": 2}],
+            }
+        },
+        "/api/scrums": {
+            "items": [
+                {
+                    "id": 1,
+                    "status": "active",
+                    "summary": {"items": 2},
+                    "items": [{"id": 1}, {"id": 2}],
+                }
+            ]
+        },
+        "/api/routines/checks": {"items": [{"id": 1}, {"id": 2}]},
+    }
+
+    async def fake_get_json(_base_url, path, params=None):
+        return responses[path]
+
+    monkeypatch.setattr(module, "_get_json", fake_get_json)
+
+    async def scenario():
+        lists = await module.list_todo_lists(query="work", limit=10)
+        assert lists["items"] == [{"id": "list-1", "displayName": "Work"}]
+
+        tasks = await module.search_todos(
+            query=None,
+            pool=None,
+            workflow_status=None,
+            task_status=None,
+            list_id=None,
+            include_details=False,
+            body_max_chars=1000,
+            limit=50,
+        )
+        assert "bodyContent" not in tasks["items"][0]
+        assert "recurrenceJson" not in tasks["items"][0]
+
+        rules = await module.list_trigger_rules(enabled_only=True, limit=50)
+        assert [item["id"] for item in rules["items"]] == [1]
+        events = await module.list_trigger_events(active_only=True, limit=50)
+        assert [item["id"] for item in events["items"]] == [1]
+        epics = await module.list_epics(include_completed=False, limit=50)
+        assert [item["id"] for item in epics["items"]] == [1]
+
+        milestones = await module.list_milestones(
+            start_date="2026-07-01",
+            end_date="2026-07-31",
+            include_links=False,
+            links_per_milestone=50,
+            limit=20,
+        )
+        assert milestones["items"][0]["summary"] == {"epics": 1, "tasks": 1, "scrums": 1}
+        assert "tasks" not in milestones["items"][0]
+
+        scrums = await module.list_scrums(
+            status="active", scrum_id=None, include_tasks=False, limit=5, task_limit=100
+        )
+        assert scrums["returned"] == 1
+        assert "items" not in scrums["items"][0]
+        detail = await module.list_scrums(
+            status="all", scrum_id=1, include_tasks=True, limit=5, task_limit=1
+        )
+        assert detail["items"][0]["items"] == [{"id": 1}]
+        assert detail["items"][0]["taskResultInfo"]["truncated"] is True
+        with pytest.raises(ToolError, match="requires scrum_id"):
+            await module.list_scrums(
+                status="all", scrum_id=None, include_tasks=True, limit=5, task_limit=100
+            )
+
+        routines = await module.list_routine_checks(
+            start_date="2026-07-01", end_date="2026-07-31", limit=1
+        )
+        assert routines["returned"] == 1
+        assert routines["truncated"] is True
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        executor.submit(asyncio.run, scenario()).result()

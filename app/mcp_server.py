@@ -212,6 +212,22 @@ def _limit_snapshot_state(
     }
 
 
+def _page(items: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+    total = len(items)
+    returned = items[:limit]
+    return {
+        "count": total,
+        "returned": len(returned),
+        "truncated": total > len(returned),
+        "items": returned,
+    }
+
+
+def _is_completed_status(value: Any) -> bool:
+    status = str(value or "").strip().lower()
+    return status in {"done", "closed", "resolved", "complete", "completed"}
+
+
 async def _get_json(base_url: str, path: str, params: dict[str, Any] | None = None) -> Any:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -240,9 +256,17 @@ async def health(_: Request) -> Response:
 
 
 @mcp.tool(annotations=read_only)
-async def list_todo_lists() -> dict[str, Any]:
+async def list_todo_lists(
+    query: str | None = Field(default=None, description="Case-insensitive list-name search"),
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
     """List TriggerToDo task lists. Use this before filtering tasks by list ID."""
-    return await asyncio.to_thread(_read_todo_lists)
+    data = await asyncio.to_thread(_read_todo_lists)
+    items = data["items"]
+    if query:
+        needle = query.casefold()
+        items = [item for item in items if needle in str(item.get("displayName", "")).casefold()]
+    return _page(items, limit)
 
 
 def _read_todo_lists() -> dict[str, Any]:
@@ -264,7 +288,9 @@ async def search_todos(
     workflow_status: str | None = Field(default=None, description="Exact workflow status"),
     task_status: Literal["notStarted", "inProgress", "completed", "waitingOnOthers", "deferred"] | None = None,
     list_id: str | None = Field(default=None, description="Exact list ID returned by list_todo_lists"),
-    limit: int = Field(default=50, ge=1, le=200),
+    include_details: bool = Field(default=False, description="Include body and recurrence details when true"),
+    body_max_chars: int = Field(default=1000, ge=100, le=2000, description="Per-task body limit in detail mode"),
+    limit: int = Field(default=50, ge=1, le=100),
 ) -> dict[str, Any]:
     """Search cached TriggerToDo tasks without synchronizing or modifying them."""
     data = await _get_json(
@@ -281,54 +307,164 @@ async def search_todos(
     if list_id:
         items = [item for item in items if item.get("listId") == list_id]
     total = len(items)
-    return {"count": total, "returned": min(total, limit), "items": items[:limit]}
+    returned = []
+    for source in items[:limit]:
+        item = dict(source)
+        if include_details:
+            body = str(item.get("bodyContent") or "")
+            item["bodyContent"] = body[:body_max_chars]
+            item["bodyTruncated"] = len(body) > body_max_chars
+        else:
+            item.pop("bodyContent", None)
+            item.pop("recurrenceJson", None)
+        returned.append(item)
+    return {"count": total, "returned": len(returned), "truncated": total > len(returned), "items": returned}
 
 
 @mcp.tool(annotations=read_only)
-async def list_trigger_rules() -> dict[str, Any]:
+async def list_trigger_rules(
+    enabled_only: bool = Field(default=True, description="Return only enabled rules by default"),
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
     """List TriggerToDo automation rules; this never runs a trigger."""
-    return await _get_json(TRIGGER_URL, "/api/triggers")
+    data = await _get_json(TRIGGER_URL, "/api/triggers")
+    items = data.get("items", [])
+    if enabled_only:
+        items = [item for item in items if item.get("enabled") is True]
+    return _page(items, limit)
 
 
 @mcp.tool(annotations=read_only)
-async def list_trigger_events() -> dict[str, Any]:
+async def list_trigger_events(
+    active_only: bool = Field(default=False, description="Return only active/occurred events when true"),
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
     """List TriggerToDo events and whether they have occurred."""
-    return await _get_json(TRIGGER_URL, "/api/events")
+    data = await _get_json(TRIGGER_URL, "/api/events")
+    items = data.get("items", [])
+    if active_only:
+        items = [item for item in items if item.get("is_active") is True]
+    return _page(items, limit)
 
 
 @mcp.tool(annotations=read_only)
-async def list_epics() -> dict[str, Any]:
+async def list_epics(
+    include_completed: bool = Field(default=False, description="Include completed/closed epics when true"),
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
     """List TriggerToDo epics with status and priority."""
-    return await _get_json(TRIGGER_URL, "/api/epics")
+    data = await _get_json(TRIGGER_URL, "/api/epics")
+    items = data.get("items", [])
+    if not include_completed:
+        items = [item for item in items if not _is_completed_status(item.get("status"))]
+    return _page(items, limit)
 
 
 @mcp.tool(annotations=read_only)
-async def list_milestones() -> dict[str, Any]:
-    """List TriggerToDo milestones and their linked planning items."""
-    return await _get_json(TRIGGER_URL, "/api/milestones")
+async def list_milestones(
+    start_date: str | None = Field(default=None, description="Inclusive milestone start date, YYYY-MM-DD"),
+    end_date: str | None = Field(default=None, description="Inclusive milestone end date, YYYY-MM-DD"),
+    include_links: bool = Field(default=False, description="Include linked Epic/task/Scrum details when true"),
+    links_per_milestone: int = Field(default=50, ge=1, le=100, description="Maximum linked records of each type"),
+    limit: int = Field(default=20, ge=1, le=100),
+) -> dict[str, Any]:
+    """List bounded TriggerToDo milestone summaries; linked records are opt-in."""
+    start = _iso_date(start_date, "start_date")
+    end = _iso_date(end_date, "end_date")
+    if start and end and start > end:
+        raise ToolError("start_date must not be after end_date")
+    data = await _get_json(TRIGGER_URL, "/api/milestones")
+    items = data.get("items", [])
+    if start:
+        items = [
+            item
+            for item in items
+            if str(item.get("milestone_at") or "")[:10]
+            and str(item.get("milestone_at") or "")[:10] >= start
+        ]
+    if end:
+        items = [
+            item
+            for item in items
+            if str(item.get("milestone_at") or "")[:10]
+            and str(item.get("milestone_at") or "")[:10] <= end
+        ]
+    compact = []
+    for source in items:
+        item = dict(source)
+        if include_links:
+            for field in ("epic_keys", "task_ids", "scrum_ids", "epics", "tasks", "scrums"):
+                item[field] = item.get(field, [])[:links_per_milestone]
+            item["linkResultInfo"] = {
+                "limitPerType": links_per_milestone,
+                "truncated": any(
+                    int(item.get("summary", {}).get(field, 0)) > links_per_milestone
+                    for field in ("epics", "tasks", "scrums")
+                ),
+            }
+        else:
+            for field in ("epic_keys", "task_ids", "scrum_ids", "epics", "tasks", "scrums"):
+                item.pop(field, None)
+        compact.append(item)
+    return _page(compact, limit)
 
 
 @mcp.tool(annotations=read_only)
-async def list_scrums(status: Literal["all", "active"] = "all") -> dict[str, Any]:
-    """List all TriggerToDo scrums or only the active scrum."""
-    return await _get_json(TRIGGER_URL, "/api/scrums/active" if status == "active" else "/api/scrums")
+async def list_scrums(
+    status: Literal["active", "draft", "completed", "all"] = "active",
+    scrum_id: int | None = Field(default=None, ge=1, description="Return one Scrum by ID regardless of status"),
+    include_tasks: bool = Field(default=False, description="Include task items; requires scrum_id"),
+    limit: int = Field(default=5, ge=1, le=50),
+    task_limit: int = Field(default=100, ge=1, le=200, description="Maximum task items for a specific Scrum"),
+) -> dict[str, Any]:
+    """List bounded Scrum summaries; defaults to active, and tasks require a specific Scrum ID."""
+    if include_tasks and scrum_id is None:
+        raise ToolError("include_tasks requires scrum_id")
+    if scrum_id is None and status == "active":
+        data = await _get_json(TRIGGER_URL, "/api/scrums/active")
+        items = [data["item"]] if data.get("item") else []
+    else:
+        data = await _get_json(TRIGGER_URL, "/api/scrums")
+        items = data.get("items", [])
+        if scrum_id is not None:
+            items = [item for item in items if item.get("id") == scrum_id]
+        elif status != "all":
+            items = [item for item in items if item.get("status") == status]
+
+    compact = []
+    for source in items:
+        item = dict(source)
+        tasks = item.get("items", [])
+        if include_tasks:
+            item["items"] = tasks[:task_limit]
+            item["taskResultInfo"] = {
+                "availableTasks": len(tasks),
+                "returnedTasks": len(item["items"]),
+                "truncated": len(tasks) > len(item["items"]),
+            }
+        else:
+            item.pop("items", None)
+        compact.append(item)
+    return _page(compact, 1 if scrum_id is not None else limit)
 
 
 @mcp.tool(annotations=read_only)
 async def list_routine_checks(
     start_date: str = Field(description="Inclusive ISO date (YYYY-MM-DD)"),
     end_date: str = Field(description="Inclusive ISO date (YYYY-MM-DD)"),
+    limit: int = Field(default=100, ge=1, le=500),
 ) -> dict[str, Any]:
     """List TriggerToDo routine completion checks in a date range."""
-    return await _get_json(
+    data = await _get_json(
         TRIGGER_URL, "/api/routines/checks", {"start_date": start_date, "end_date": end_date}
     )
+    return _page(data.get("items", []), limit)
 
 
 @mcp.tool(annotations=read_only)
 async def get_finance_overview(
     month: str | None = Field(default=None, description="Exact report month in YYYY-MM; defaults to latest"),
-    months_limit: int = Field(default=1, ge=1, le=24, description="Maximum report months to return"),
+    months_limit: int = Field(default=1, ge=1, le=12, description="Maximum report months to return"),
     ledger_start_date: str | None = Field(default=None, description="Inclusive ledger start date, YYYY-MM-DD"),
     ledger_end_date: str | None = Field(default=None, description="Inclusive ledger end date, YYYY-MM-DD"),
     ledger_limit: int = Field(default=100, ge=1, le=500, description="Maximum matching ledger entries"),
@@ -354,8 +490,8 @@ async def get_investments(
     snapshot_date: str | None = Field(default=None, description="Exact snapshot date, YYYY-MM-DD"),
     start_date: str | None = Field(default=None, description="Inclusive snapshot start date, YYYY-MM-DD"),
     end_date: str | None = Field(default=None, description="Inclusive snapshot end date, YYYY-MM-DD"),
-    snapshot_limit: int = Field(default=1, ge=1, le=24, description="Maximum snapshots; defaults to latest only"),
-    items_per_snapshot: int = Field(default=100, ge=1, le=500, description="Maximum holdings per snapshot"),
+    snapshot_limit: int = Field(default=1, ge=1, le=12, description="Maximum snapshots; defaults to latest only"),
+    items_per_snapshot: int = Field(default=100, ge=1, le=200, description="Maximum holdings per snapshot"),
 ) -> dict[str, Any]:
     """Read bounded Fire investment snapshots; defaults to the latest snapshot only."""
     state = await asyncio.to_thread(_load_fire_state, "load_investment_state")
@@ -374,8 +510,8 @@ async def get_portfolio(
     snapshot_date: str | None = Field(default=None, description="Exact snapshot date, YYYY-MM-DD"),
     start_date: str | None = Field(default=None, description="Inclusive snapshot start date, YYYY-MM-DD"),
     end_date: str | None = Field(default=None, description="Inclusive snapshot end date, YYYY-MM-DD"),
-    snapshot_limit: int = Field(default=1, ge=1, le=24, description="Maximum snapshots; defaults to latest only"),
-    items_per_snapshot: int = Field(default=100, ge=1, le=500, description="Maximum holdings per snapshot"),
+    snapshot_limit: int = Field(default=1, ge=1, le=12, description="Maximum snapshots; defaults to latest only"),
+    items_per_snapshot: int = Field(default=100, ge=1, le=200, description="Maximum holdings per snapshot"),
 ) -> dict[str, Any]:
     """Read bounded Fire portfolio snapshots; defaults to the latest snapshot only."""
     state = await asyncio.to_thread(_load_fire_state, "load_portfolio_state")
