@@ -80,4 +80,5 @@ COPY pyproject.toml uv.lock ./
 EXPOSE 8000
 EXPOSE 8001
 EXPOSE 8004
+EXPOSE 8005
 CMD ["python", "scripts/run_servers.py"]

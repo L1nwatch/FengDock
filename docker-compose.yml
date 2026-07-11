@@ -13,6 +13,11 @@ services:
       CELPIP_HOST: 0.0.0.0
       CELPIP_PORT: 8004
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://watch0.top}
+      MCP_AUTH_USERNAME: ${MCP_AUTH_USERNAME:-watch}
+      MCP_AUTH_PASSWORD: ${MCP_AUTH_PASSWORD:-}
+      MCP_AUTH_DATABASE: /app/data/mcp-auth.sqlite3
+      FIRE_DATABASE_PATH: /app/vendor/fire/data/fire.sqlite3
     volumes:
       - backend_db:/app/data
       - backend_db:/app/vendor/fire/data

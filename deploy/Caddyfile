@@ -18,6 +18,11 @@ http://vultr.tailde302.ts.net {
 {$DOMAIN}, vultr.tailde302.ts.net {
     encode gzip zstd
 
+    @mcp path /mcp /mcp/* /.well-known/oauth-authorization-server /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /authorize /token /register /revoke /login /login/*
+    handle @mcp {
+        reverse_proxy backend:8005
+    }
+
     @triggertodo_api path /api/health /api/todo/* /api/triggers /api/triggers/* /api/events /api/events/* /api/epics /api/epics/* /api/milestones /api/milestones/* /api/scrums /api/scrums/* /api/routines /api/routines/* /api/sync/* /api/jira/*
     handle @triggertodo_api {
         reverse_proxy backend:8001

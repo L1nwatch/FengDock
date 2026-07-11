@@ -86,6 +86,12 @@ Add these secrets at repository level:
 - `DEPLOY_USER` – SSH user
 - `DEPLOY_PATH` – absolute path of the repo on the server
 - `DEPLOY_SSH_KEY` – private key with access to the VPS
+- `MCP_AUTH_PASSWORD` – required password for authorizing ChatGPT MCP access
+
+Optional repository variables:
+
+- `MCP_PUBLIC_URL` – defaults to `https://watch0.top`
+- `MCP_AUTH_USERNAME` – defaults to `watch`
 
 No extra registry credentials are required; the workflow logs into GHCR with `GITHUB_TOKEN`.
 
@@ -100,6 +106,20 @@ No extra registry credentials are required; the workflow logs into GHCR with `GI
 
 - `deploy/Caddyfile` proxies `/api/*` requests to the FastAPI container (`backend:8000`) and serves `index.html` plus `/static/**` directly.
 - Update `DOMAIN` and `CADDY_GLOBAL_OPTIONS` (for contact email) via environment variables.
+
+## ChatGPT MCP (read-only)
+
+The deployment exposes a Streamable HTTP MCP server at `https://watch0.top/mcp`. It uses OAuth 2.1
+with PKCE and dynamic client registration, and only publishes read-only TriggerToDo and Fire tools.
+
+The deploy workflow injects these values into Docker Compose. Configure `MCP_AUTH_PASSWORD` as a
+GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repository variables:
+
+- `MCP_PUBLIC_URL` – public origin, normally `https://watch0.top`
+- `MCP_AUTH_USERNAME` – login name shown during ChatGPT authorization (default: `watch`)
+- `MCP_AUTH_PASSWORD` – required secret; when empty, authorization is disabled
+
+In ChatGPT, enable Developer mode, create an app using `https://watch0.top/mcp`, and select OAuth.
 
 ## Useful Commands
 

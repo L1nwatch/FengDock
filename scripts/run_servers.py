@@ -64,6 +64,17 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         cwd="/app/vendor/fire",
         env=fire_env,
     )
+    mcp_app = subprocess.Popen(
+        [
+            "/app/.venv/bin/uvicorn",
+            "app.mcp_server:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8005",
+        ],
+        cwd="/app",
+    )
     celpip_env = os.environ.copy()
     celpip_env["CELPIP_HOST"] = "0.0.0.0"
     celpip_env["CELPIP_PORT"] = "8004"
@@ -76,7 +87,7 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         cwd="/app/vendor/celpip-exam-simulation",
         env=celpip_env,
     )
-    return [fengdock, triggertodo, codex_proxy, fire_app, celpip_app]
+    return [fengdock, triggertodo, codex_proxy, fire_app, celpip_app, mcp_app]
 
 
 def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:
