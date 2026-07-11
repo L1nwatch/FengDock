@@ -129,3 +129,68 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert authorized.status_code == 200, authorized.text
         assert authorized.json()["result"]["serverInfo"]["name"] == "FengDock"
+
+        listed = client.post(
+            "/mcp",
+            headers={
+                "Authorization": f"Bearer {payload['access_token']}",
+                "Accept": "application/json, text/event-stream",
+            },
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+        assert listed.status_code == 200, listed.text
+        tools = listed.json()["result"]["tools"]
+        assert len(tools) == 11
+        assert {tool["name"] for tool in tools} >= {"search_todos", "get_finance_overview"}
+
+
+def test_finance_results_default_to_latest_month_and_bounded_entries(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    state = {
+        "months": [{"label": "2026-07"}, {"label": "2026-06"}],
+        "ledger": [
+            {"date": "2026-07-03", "amount": -3},
+            {"date": "2026-07-02", "amount": -2},
+            {"date": "2026-06-01", "amount": -1},
+        ],
+        "forecast": [{"year": 2027}, {"year": 2028}],
+    }
+    result = module._limit_finance_state(
+        state,
+        month=None,
+        months_limit=1,
+        ledger_start_date=None,
+        ledger_end_date=None,
+        ledger_limit=1,
+        include_forecast=False,
+        forecast_limit=25,
+    )
+    assert result["months"] == [{"label": "2026-07"}]
+    assert result["ledger"] == [{"date": "2026-07-03", "amount": -3}]
+    assert result["forecast"] == []
+    assert result["resultInfo"]["matchingLedgerEntries"] == 2
+
+
+def test_snapshot_results_support_dates_and_limits(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    state = {
+        "snapshots": [
+            {"date": "2026-07-03", "items": [{"id": "a"}, {"id": "b"}]},
+            {"date": "2026-06-01", "items": [{"id": "c"}]},
+        ]
+    }
+    result = module._limit_snapshot_state(
+        state,
+        snapshot_date=None,
+        start_date="2026-07-01",
+        end_date=None,
+        snapshot_limit=1,
+        items_per_snapshot=1,
+    )
+    assert result["resultInfo"] == {
+        "availableSnapshots": 2,
+        "matchingSnapshots": 1,
+        "returnedSnapshots": 1,
+    }
+    assert result["snapshots"][0]["items"] == [{"id": "a"}]
+    assert result["snapshots"][0]["resultInfo"] == {"availableItems": 2, "returnedItems": 1}

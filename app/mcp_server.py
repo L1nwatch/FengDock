@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import os
+import re
 import sqlite3
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -93,6 +95,121 @@ def _load_fire_state(loader_name: str) -> dict[str, Any]:
             return loader(conn)
     except sqlite3.Error as exc:
         raise ToolError("Fire data is currently unavailable") from exc
+
+
+def _iso_date(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise ToolError(f"{field_name} must be an ISO date (YYYY-MM-DD)") from None
+
+
+def _month_label(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", value):
+        raise ToolError("month must use YYYY-MM")
+    return value
+
+
+def _limit_finance_state(
+    state: dict[str, Any],
+    *,
+    month: str | None,
+    months_limit: int,
+    ledger_start_date: str | None,
+    ledger_end_date: str | None,
+    ledger_limit: int,
+    include_forecast: bool,
+    forecast_limit: int,
+) -> dict[str, Any]:
+    selected_month = _month_label(month)
+    start = _iso_date(ledger_start_date, "ledger_start_date")
+    end = _iso_date(ledger_end_date, "ledger_end_date")
+    if start and end and start > end:
+        raise ToolError("ledger_start_date must not be after ledger_end_date")
+
+    all_months = state.get("months", [])
+    months = [item for item in all_months if item.get("label") == selected_month] if selected_month else all_months
+    months = months[:months_limit]
+    returned_labels = {str(item.get("label", "")) for item in months}
+
+    all_ledger = state.get("ledger", [])
+    ledger = all_ledger
+    if start:
+        ledger = [item for item in ledger if str(item.get("date", "")) >= start]
+    if end:
+        ledger = [item for item in ledger if str(item.get("date", "")) <= end]
+    if not start and not end:
+        if selected_month:
+            ledger = [item for item in ledger if str(item.get("date", ""))[:7] == selected_month]
+        elif returned_labels:
+            ledger = [item for item in ledger if str(item.get("date", ""))[:7] in returned_labels]
+    ledger_total = len(ledger)
+    ledger = ledger[:ledger_limit]
+
+    all_forecast = state.get("forecast", [])
+    forecast = all_forecast[:forecast_limit] if include_forecast else []
+    return {
+        "months": months,
+        "ledger": ledger,
+        "forecast": forecast,
+        "resultInfo": {
+            "availableMonths": len(all_months),
+            "returnedMonths": len(months),
+            "matchingLedgerEntries": ledger_total,
+            "returnedLedgerEntries": len(ledger),
+            "availableForecastEntries": len(all_forecast),
+            "returnedForecastEntries": len(forecast),
+        },
+    }
+
+
+def _limit_snapshot_state(
+    state: dict[str, Any],
+    *,
+    snapshot_date: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    snapshot_limit: int,
+    items_per_snapshot: int,
+) -> dict[str, Any]:
+    exact = _iso_date(snapshot_date, "snapshot_date")
+    start = _iso_date(start_date, "start_date")
+    end = _iso_date(end_date, "end_date")
+    if start and end and start > end:
+        raise ToolError("start_date must not be after end_date")
+
+    all_snapshots = state.get("snapshots", [])
+    snapshots = all_snapshots
+    if exact:
+        snapshots = [item for item in snapshots if item.get("date") == exact]
+    if start:
+        snapshots = [item for item in snapshots if str(item.get("date", "")) >= start]
+    if end:
+        snapshots = [item for item in snapshots if str(item.get("date", "")) <= end]
+    matching_count = len(snapshots)
+    snapshots = snapshots[:snapshot_limit]
+    returned = []
+    for snapshot in snapshots:
+        item = dict(snapshot)
+        all_items = snapshot.get("items", [])
+        item["items"] = all_items[:items_per_snapshot]
+        item["resultInfo"] = {
+            "availableItems": len(all_items),
+            "returnedItems": len(item["items"]),
+        }
+        returned.append(item)
+    return {
+        "snapshots": returned,
+        "resultInfo": {
+            "availableSnapshots": len(all_snapshots),
+            "matchingSnapshots": matching_count,
+            "returnedSnapshots": len(returned),
+        },
+    }
 
 
 async def _get_json(base_url: str, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -209,21 +326,67 @@ async def list_routine_checks(
 
 
 @mcp.tool(annotations=read_only)
-async def get_finance_overview() -> dict[str, Any]:
-    """Read the Fire monthly finance, ledger, forecast, and summary data."""
-    return await asyncio.to_thread(_load_fire_state, "load_finance_state")
+async def get_finance_overview(
+    month: str | None = Field(default=None, description="Exact report month in YYYY-MM; defaults to latest"),
+    months_limit: int = Field(default=1, ge=1, le=24, description="Maximum report months to return"),
+    ledger_start_date: str | None = Field(default=None, description="Inclusive ledger start date, YYYY-MM-DD"),
+    ledger_end_date: str | None = Field(default=None, description="Inclusive ledger end date, YYYY-MM-DD"),
+    ledger_limit: int = Field(default=100, ge=1, le=500, description="Maximum matching ledger entries"),
+    include_forecast: bool = Field(default=False, description="Include forecast entries when true"),
+    forecast_limit: int = Field(default=25, ge=1, le=100, description="Maximum forecast entries"),
+) -> dict[str, Any]:
+    """Read a bounded Fire finance view; defaults to the latest month and at most 100 ledger entries."""
+    state = await asyncio.to_thread(_load_fire_state, "load_finance_state")
+    return _limit_finance_state(
+        state,
+        month=month,
+        months_limit=months_limit,
+        ledger_start_date=ledger_start_date,
+        ledger_end_date=ledger_end_date,
+        ledger_limit=ledger_limit,
+        include_forecast=include_forecast,
+        forecast_limit=forecast_limit,
+    )
 
 
 @mcp.tool(annotations=read_only)
-async def get_investments() -> dict[str, Any]:
-    """Read the Fire investment snapshots and holdings."""
-    return await asyncio.to_thread(_load_fire_state, "load_investment_state")
+async def get_investments(
+    snapshot_date: str | None = Field(default=None, description="Exact snapshot date, YYYY-MM-DD"),
+    start_date: str | None = Field(default=None, description="Inclusive snapshot start date, YYYY-MM-DD"),
+    end_date: str | None = Field(default=None, description="Inclusive snapshot end date, YYYY-MM-DD"),
+    snapshot_limit: int = Field(default=1, ge=1, le=24, description="Maximum snapshots; defaults to latest only"),
+    items_per_snapshot: int = Field(default=100, ge=1, le=500, description="Maximum holdings per snapshot"),
+) -> dict[str, Any]:
+    """Read bounded Fire investment snapshots; defaults to the latest snapshot only."""
+    state = await asyncio.to_thread(_load_fire_state, "load_investment_state")
+    return _limit_snapshot_state(
+        state,
+        snapshot_date=snapshot_date,
+        start_date=start_date,
+        end_date=end_date,
+        snapshot_limit=snapshot_limit,
+        items_per_snapshot=items_per_snapshot,
+    )
 
 
 @mcp.tool(annotations=read_only)
-async def get_portfolio() -> dict[str, Any]:
-    """Read the Fire portfolio snapshots and holdings."""
-    return await asyncio.to_thread(_load_fire_state, "load_portfolio_state")
+async def get_portfolio(
+    snapshot_date: str | None = Field(default=None, description="Exact snapshot date, YYYY-MM-DD"),
+    start_date: str | None = Field(default=None, description="Inclusive snapshot start date, YYYY-MM-DD"),
+    end_date: str | None = Field(default=None, description="Inclusive snapshot end date, YYYY-MM-DD"),
+    snapshot_limit: int = Field(default=1, ge=1, le=24, description="Maximum snapshots; defaults to latest only"),
+    items_per_snapshot: int = Field(default=100, ge=1, le=500, description="Maximum holdings per snapshot"),
+) -> dict[str, Any]:
+    """Read bounded Fire portfolio snapshots; defaults to the latest snapshot only."""
+    state = await asyncio.to_thread(_load_fire_state, "load_portfolio_state")
+    return _limit_snapshot_state(
+        state,
+        snapshot_date=snapshot_date,
+        start_date=start_date,
+        end_date=end_date,
+        snapshot_limit=snapshot_limit,
+        items_per_snapshot=items_per_snapshot,
+    )
 
 
 app = mcp.streamable_http_app()
