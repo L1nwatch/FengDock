@@ -116,7 +116,7 @@ The deploy workflow injects these values into Docker Compose. Configure `MCP_AUT
 GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repository variables:
 
 - `MCP_PUBLIC_URL` – public origin, normally `https://watch0.top`
-- `MCP_AUTH_USERNAME` – login name shown during ChatGPT authorization (default: `watch`)
+- `MCP_AUTH_USERNAME` – internal OAuth subject name (default: `watch`); users only enter the password
 - `MCP_AUTH_PASSWORD` – required secret; when empty, authorization is disabled
 
 In ChatGPT, enable Developer mode, create an app using `https://watch0.top/mcp`, and select OAuth.

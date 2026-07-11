@@ -159,7 +159,6 @@ button{{margin-top:22px;padding:11px 18px;border:0;border-radius:8px;background:
 </head><body><h1>Authorize FengDock</h1><p>{html.escape(message)}</p>
 <form action="/login/callback" method="post">
 <input type="hidden" name="nonce" value="{html.escape(nonce, quote=True)}">
-<label for="username">Username</label><input id="username" name="username" autocomplete="username" required>
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
 <button type="submit"{disabled}>Authorize read-only access</button></form></body></html>"""
         return HTMLResponse(
@@ -204,18 +203,16 @@ button{{margin-top:22px;padding:11px 18px;border:0;border-radius:8px;background:
 
     async def handle_login_callback(self, request: Request) -> Response:
         form = await request.form()
-        username, password, nonce = form.get("username"), form.get("password"), form.get("nonce")
-        if not all(isinstance(value, str) for value in (username, password, nonce)):
+        password, nonce = form.get("password"), form.get("nonce")
+        if not all(isinstance(value, str) for value in (password, nonce)):
             raise HTTPException(400, "Missing login fields")
-        assert isinstance(username, str) and isinstance(password, str) and isinstance(nonce, str)
+        assert isinstance(password, str) and isinstance(nonce, str)
         remote_key = self._remote_key(request)
         with self._connect() as conn:
             self._cleanup(conn)
             if not self._login_allowed(conn, remote_key):
                 raise HTTPException(429, "Too many login attempts; try again later")
-            if not self.password or not (
-                hmac.compare_digest(username, self.username) and hmac.compare_digest(password, self.password)
-            ):
+            if not self.password or not hmac.compare_digest(password, self.password):
                 self._record_login_failure(conn, remote_key)
                 raise HTTPException(401, "Invalid credentials")
             row = conn.execute("SELECT payload FROM oauth_states WHERE nonce = ?", (nonce,)).fetchone()

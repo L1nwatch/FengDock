@@ -77,9 +77,14 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert authorization.status_code == 302
         nonce = parse_qs(urlparse(authorization.headers["location"]).query)["nonce"][0]
 
+        login_page = client.get(f"/login?nonce={nonce}")
+        assert login_page.status_code == 200
+        assert 'name="password"' in login_page.text
+        assert 'name="username"' not in login_page.text
+
         login = client.post(
             "/login/callback",
-            data={"nonce": nonce, "username": "test-user", "password": "test-password"},
+            data={"nonce": nonce, "password": "test-password"},
         )
         assert login.status_code == 302
         callback = urlparse(login.headers["location"])
