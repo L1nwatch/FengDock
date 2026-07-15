@@ -7,18 +7,20 @@ import importlib.util
 import os
 import re
 import sqlite3
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
 import httpx
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, ValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
@@ -35,12 +37,20 @@ read_only = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+write_tool = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=False,
+)
 
 mcp = FastMCP(
     name="FengDock",
     instructions=(
-        "Read-only access to the owner's TriggerToDo planning data and Fire personal finance data. "
-        "Never claim that these tools can create, update, delete, trigger, refresh, or synchronize data."
+        "Read access to the owner's TriggerToDo planning data, Fire personal finance data, and "
+        "Conclusion decision knowledge base. Conclusion create/update tools write data and must only "
+        "be used when the user explicitly asks to save or update a conclusion. No tool deletes data, "
+        "runs triggers, refreshes finance data, or synchronizes external systems."
     ),
     auth_server_provider=provider,
     auth=AuthSettings(
@@ -49,8 +59,8 @@ mcp = FastMCP(
         required_scopes=[provider.scope],
         client_registration_options=ClientRegistrationOptions(
             enabled=True,
-            valid_scopes=[provider.scope],
-            default_scopes=[provider.scope],
+            valid_scopes=provider.scopes,
+            default_scopes=provider.scopes,
         ),
         revocation_options=RevocationOptions(enabled=True),
     ),
@@ -70,6 +80,18 @@ FIRE_DATABASE_PATH = Path(
     os.getenv(
         "FIRE_DATABASE_PATH",
         str(Path(__file__).resolve().parents[1] / "vendor" / "fire" / "data" / "fire.sqlite3"),
+    )
+)
+CONCLUSION_DATABASE_PATH = Path(
+    os.getenv(
+        "CONCLUSION_DATABASE_PATH",
+        str(
+            Path(__file__).resolve().parents[1]
+            / "vendor"
+            / "conclusion"
+            / "data"
+            / "conclusion.sqlite3"
+        ),
     )
 )
 
@@ -95,6 +117,68 @@ def _load_fire_state(loader_name: str) -> dict[str, Any]:
             return loader(conn)
     except sqlite3.Error as exc:
         raise ToolError("Fire data is currently unavailable") from exc
+
+
+def _load_conclusion_module(filename: str) -> Any:
+    module_path = (
+        Path(__file__).resolve().parents[1]
+        / "vendor"
+        / "conclusion"
+        / "app"
+        / filename
+    )
+    module_name = f"fengdock_conclusion_{Path(filename).stem}"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if not spec or not spec.loader:
+        raise ToolError("Conclusion data tools are currently unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        sys.modules.pop(module_name, None)
+        raise ToolError("Conclusion data tools are currently unavailable") from exc
+    return module
+
+
+def _conclusion_modules() -> tuple[Any, Any]:
+    return _load_conclusion_module("db.py"), _load_conclusion_module("schemas.py")
+
+
+def _serialize_conclusion_record(schemas: Any, record: dict[str, Any]) -> dict[str, Any]:
+    return schemas.ConclusionRecord.model_validate(record).model_dump(
+        by_alias=True,
+        mode="json",
+    )
+
+
+def _serialize_conclusion_page(schemas: Any, page: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "count": page["count"],
+        "returned": page["returned"],
+        "items": [
+            _serialize_conclusion_record(schemas, record) for record in page["items"]
+        ],
+    }
+
+
+def _serialize_decision_model(schemas: Any, record: dict[str, Any]) -> dict[str, Any]:
+    return schemas.DecisionModelRecord.model_validate(record).model_dump(
+        by_alias=True,
+        mode="json",
+    )
+
+
+def _validation_tool_error(error: ValidationError) -> ToolError:
+    first = error.errors(include_url=False)[0]
+    location = ".".join(str(part) for part in first["loc"])
+    return ToolError(f"Invalid Conclusion input at {location}: {first['msg']}")
+
+
+def _require_conclusion_write_scope() -> None:
+    token = get_access_token()
+    if token is not None and "fengdock:write" not in token.scopes:
+        raise ToolError("Conclusion writes require the fengdock:write OAuth scope")
 
 
 def _iso_date(value: str | None, field_name: str) -> str | None:
@@ -523,6 +607,282 @@ async def get_portfolio(
         snapshot_limit=snapshot_limit,
         items_per_snapshot=items_per_snapshot,
     )
+
+
+@mcp.tool(annotations=read_only)
+async def list_conclusions(
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """List the owner's most recently updated Conclusions with a bounded result size."""
+
+    def read() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        try:
+            with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
+                page = db.list_conclusions(connection, limit=limit)
+        except sqlite3.Error as exc:
+            raise ToolError("Conclusion data is currently unavailable") from exc
+        return _serialize_conclusion_page(schemas, page)
+
+    return await asyncio.to_thread(read)
+
+
+@mcp.tool(annotations=read_only)
+async def search_conclusions(
+    query: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Case-insensitive text in title, question, conclusion, or reason",
+    ),
+    category: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Exact category, case-insensitive",
+    ),
+    tag: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Exact tag, case-insensitive",
+    ),
+    limit: int = Field(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """Search prior Conclusions before analyzing a similar decision."""
+    query = query.strip() if query else None
+    category = category.strip() if category else None
+    tag = tag.strip() if tag else None
+    if not any((query, category, tag)):
+        raise ToolError("Provide at least one of query, category, or tag")
+
+    def read() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        try:
+            with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
+                page = db.search_conclusions(
+                    connection,
+                    query=query,
+                    category=category,
+                    tag=tag,
+                    limit=limit,
+                )
+        except sqlite3.Error as exc:
+            raise ToolError("Conclusion data is currently unavailable") from exc
+        return _serialize_conclusion_page(schemas, page)
+
+    return await asyncio.to_thread(read)
+
+
+@mcp.tool(annotations=read_only)
+async def get_conclusion(
+    conclusion_id: int = Field(ge=1),
+) -> dict[str, Any]:
+    """Get one Conclusion, including its reasoning, tradeoffs, and decision-model answers."""
+
+    def read() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        try:
+            with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
+                record = db.get_conclusion(connection, conclusion_id)
+        except sqlite3.Error as exc:
+            raise ToolError("Conclusion data is currently unavailable") from exc
+        if record is None:
+            raise ToolError(f"Conclusion {conclusion_id} was not found")
+        return _serialize_conclusion_record(schemas, record)
+
+    return await asyncio.to_thread(read)
+
+
+@mcp.tool(annotations=write_tool)
+async def create_conclusion(
+    title: str,
+    question: str,
+    conclusion: str,
+    reason: str,
+    category: str,
+    confidence: Literal["High", "Medium", "Low"],
+    tradeoffs: str = "",
+    conditions: str = "",
+    tags: list[str] | None = None,
+    decision_analysis: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create a Conclusion only when the user explicitly asks to save the decision."""
+    _require_conclusion_write_scope()
+
+    def write() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        payload = {
+            "title": title,
+            "question": question,
+            "conclusion": conclusion,
+            "reason": reason,
+            "tradeoffs": tradeoffs,
+            "conditions": conditions,
+            "category": category,
+            "tags": tags or [],
+            "confidence": confidence,
+            "decisionAnalysis": decision_analysis or {"version": 1, "models": []},
+        }
+        try:
+            validated = schemas.ConclusionCreate.model_validate(payload)
+            with db.connect(CONCLUSION_DATABASE_PATH) as connection:
+                db.init_db(connection)
+                record = db.create_conclusion(connection, validated.model_dump())
+        except ValidationError as exc:
+            raise _validation_tool_error(exc) from None
+        except db.UnknownDecisionModelError as exc:
+            raise ToolError(str(exc)) from None
+        except sqlite3.Error as exc:
+            raise ToolError("Conclusion could not be created") from exc
+        return _serialize_conclusion_record(schemas, record)
+
+    return await asyncio.to_thread(write)
+
+
+@mcp.tool(annotations=write_tool)
+async def update_conclusion(
+    conclusion_id: int = Field(ge=1),
+    expected_updated_at: str = Field(
+        description="updatedAt value from the record that is being edited",
+    ),
+    title: str | None = None,
+    question: str | None = None,
+    conclusion: str | None = None,
+    reason: str | None = None,
+    tradeoffs: str | None = None,
+    conditions: str | None = None,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    confidence: Literal["High", "Medium", "Low"] | None = None,
+    decision_analysis: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Update specified Conclusion fields with optimistic concurrency protection."""
+    _require_conclusion_write_scope()
+
+    def write() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        candidates = {
+            "title": title,
+            "question": question,
+            "conclusion": conclusion,
+            "reason": reason,
+            "tradeoffs": tradeoffs,
+            "conditions": conditions,
+            "category": category,
+            "tags": tags,
+            "confidence": confidence,
+            "decisionAnalysis": decision_analysis,
+        }
+        payload = {key: value for key, value in candidates.items() if value is not None}
+        payload["expectedUpdatedAt"] = expected_updated_at
+        try:
+            validated = schemas.ConclusionUpdate.model_validate(payload)
+            values = validated.model_dump(
+                exclude_unset=True,
+                exclude={"expected_updated_at"},
+            )
+            with db.connect(CONCLUSION_DATABASE_PATH) as connection:
+                db.init_db(connection)
+                record = db.update_conclusion(
+                    connection,
+                    conclusion_id,
+                    values,
+                    expected_updated_at=validated.expected_updated_at,
+                )
+        except ValidationError as exc:
+            raise _validation_tool_error(exc) from None
+        except db.UnknownDecisionModelError as exc:
+            raise ToolError(str(exc)) from None
+        except db.ConclusionUpdateConflictError as exc:
+            raise ToolError(
+                f"Conclusion was changed by another writer; currentUpdatedAt={exc.current_updated_at}"
+            ) from None
+        except sqlite3.Error as exc:
+            raise ToolError("Conclusion could not be updated") from exc
+        if record is None:
+            raise ToolError(f"Conclusion {conclusion_id} was not found")
+        return _serialize_conclusion_record(schemas, record)
+
+    return await asyncio.to_thread(write)
+
+
+@mcp.tool(annotations=read_only)
+async def list_decision_models() -> dict[str, Any]:
+    """List registered decision models before selecting perspectives for an analysis."""
+
+    def read() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        try:
+            with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
+                result = db.list_decision_models(connection)
+        except sqlite3.Error as exc:
+            raise ToolError("Decision models are currently unavailable") from exc
+        return {
+            "count": result["count"],
+            "items": [
+                _serialize_decision_model(schemas, record) for record in result["items"]
+            ],
+        }
+
+    return await asyncio.to_thread(read)
+
+
+@mcp.tool(annotations=read_only)
+async def get_decision_model(
+    model_id: str = Field(min_length=2, max_length=64),
+) -> dict[str, Any]:
+    """Get the ordered prompts and source for one registered decision model."""
+
+    def read() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        try:
+            with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
+                record = db.get_decision_model(connection, model_id)
+        except sqlite3.Error as exc:
+            raise ToolError("Decision models are currently unavailable") from exc
+        if record is None:
+            raise ToolError(f"Decision model {model_id} was not found")
+        return _serialize_decision_model(schemas, record)
+
+    return await asyncio.to_thread(read)
+
+
+@mcp.tool(annotations=write_tool)
+async def create_decision_model(
+    model_id: str = Field(min_length=2, max_length=64),
+    name: str = Field(min_length=1, max_length=120),
+    short_name: str = Field(min_length=1, max_length=80),
+    description: str = Field(min_length=1, max_length=500),
+    prompts: list[dict[str, str]] = Field(min_length=1, max_length=20),
+    source_name: str = "",
+    source_url: str = "",
+) -> dict[str, Any]:
+    """Register an immutable version-one custom decision model."""
+    _require_conclusion_write_scope()
+
+    def write() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        payload = {
+            "id": model_id,
+            "name": name,
+            "shortName": short_name,
+            "description": description,
+            "prompts": prompts,
+            "sourceName": source_name,
+            "sourceUrl": source_url,
+        }
+        try:
+            validated = schemas.DecisionModelCreate.model_validate(payload)
+            with db.connect(CONCLUSION_DATABASE_PATH) as connection:
+                db.init_db(connection)
+                record = db.create_decision_model(connection, validated.model_dump())
+        except ValidationError as exc:
+            raise _validation_tool_error(exc) from None
+        except db.DecisionModelAlreadyExistsError:
+            raise ToolError(f"Decision model {model_id} already exists") from None
+        except sqlite3.Error as exc:
+            raise ToolError("Decision model could not be created") from exc
+        return _serialize_decision_model(schemas, record)
+
+    return await asyncio.to_thread(write)
 
 
 app = mcp.streamable_http_app()

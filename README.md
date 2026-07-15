@@ -1,6 +1,6 @@
 # FengDock
 
-FengDock is a personal portal that pairs a FastAPI backend with a static, tool-focused frontend, packaged for local development and VPS deployment via Docker. It also includes a git submodule at `vendor/mind-map` (tracking the `fengdock` branch of `L1nwatch/mind-map`) for embedded mind-map tooling.
+FengDock is a personal portal that pairs a FastAPI backend with bundled apps and a static, tool-focused frontend, packaged for local development and VPS deployment via Docker. Bundled public submodules include TriggerToDo, Fire, CELPIP, Mind Map, and the Conclusion decision knowledge base.
 
 Personal portal composed of:
 
@@ -16,6 +16,7 @@ Everything is tested and deployed through GitHub Actions → GHCR → SSH redepl
 - FastAPI, SQLAlchemy, and SQLite
   - FengDock DB: `/app/data/db.sqlite3`
   - TriggerToDo DB: `/app/data/triggertodo.db`
+  - Conclusion DB: `/app/vendor/conclusion/data/conclusion.sqlite3`
 - APScheduler background job verifying link health
 - Docker + docker compose with Caddy reverse proxy
 - GitHub Actions building/pushing to GHCR and redeploying over SSH
@@ -107,10 +108,18 @@ No extra registry credentials are required; the workflow logs into GHCR with `GI
 - `deploy/Caddyfile` proxies `/api/*` requests to the FastAPI container (`backend:8000`) and serves `index.html` plus `/static/**` directly.
 - Update `DOMAIN` and `CADDY_GLOBAL_OPTIONS` (for contact email) via environment variables.
 
-## ChatGPT MCP (read-only)
+## ChatGPT MCP
 
 The deployment exposes a Streamable HTTP MCP server at `https://watch0.top/mcp`. It uses OAuth 2.1
-with PKCE and dynamic client registration, and only publishes read-only TriggerToDo and Fire tools.
+with PKCE and dynamic client registration. TriggerToDo and Fire tools are read-only. Conclusion adds
+bounded read tools plus explicit non-destructive write tools:
+
+- `list_conclusions`, `search_conclusions`, `get_conclusion`
+- `create_conclusion`, `update_conclusion`
+- `list_decision_models`, `get_decision_model`, `create_decision_model`
+
+Conclusion does not expose deletion through MCP. Updates require the last observed `updatedAt` value,
+so concurrent UI or MCP changes return a conflict instead of being silently overwritten.
 
 The deploy workflow injects these values into Docker Compose. Configure `MCP_AUTH_PASSWORD` as a
 GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repository variables:
@@ -120,6 +129,8 @@ GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repositor
 - `MCP_AUTH_PASSWORD` – required secret; when empty, authorization is disabled
 
 In ChatGPT, enable Developer mode, create an app using `https://watch0.top/mcp`, and select OAuth.
+Existing connections authorized before Conclusion was added retain read access but must be reauthorized
+to receive the `fengdock:write` scope before calling Conclusion create/update tools.
 
 ## Useful Commands
 

@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
 import sys
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -19,12 +20,16 @@ def _load_mcp_app(tmp_path, monkeypatch):
     monkeypatch.setenv("MCP_AUTH_USERNAME", "test-user")
     monkeypatch.setenv("MCP_AUTH_PASSWORD", "test-password")
     monkeypatch.setenv("MCP_PUBLIC_URL", "https://watch0.top")
+    monkeypatch.setenv(
+        "CONCLUSION_DATABASE_PATH",
+        str(tmp_path / "conclusion.sqlite3"),
+    )
     sys.modules.pop("app.mcp_server", None)
     sys.modules.pop("app.mcp_auth", None)
     return importlib.import_module("app.mcp_server")
 
 
-def test_mcp_requires_oauth_and_advertises_read_only_tools(tmp_path, monkeypatch):
+def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypatch):
     module = _load_mcp_app(tmp_path, monkeypatch)
     with TestClient(module.app, base_url="https://watch0.top") as client:
         metadata = client.get("/.well-known/oauth-protected-resource/mcp")
@@ -41,7 +46,14 @@ def test_mcp_requires_oauth_and_advertises_read_only_tools(tmp_path, monkeypatch
 
     tools = module.mcp._tool_manager.list_tools()
     assert tools
-    assert all(tool.annotations and tool.annotations.readOnlyHint is True for tool in tools)
+    by_name = {tool.name: tool for tool in tools}
+    write_names = {"create_conclusion", "update_conclusion", "create_decision_model"}
+    assert {name for name, tool in by_name.items() if not tool.annotations.readOnlyHint} == write_names
+    assert all(
+        tool.annotations and tool.annotations.readOnlyHint is True
+        for name, tool in by_name.items()
+        if name not in write_names
+    )
     assert all(tool.annotations and tool.annotations.destructiveHint is False for tool in tools)
 
 
@@ -59,7 +71,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
                 "token_endpoint_auth_method": "none",
                 "grant_types": ["authorization_code", "refresh_token"],
                 "response_types": ["code"],
-                "scope": "fengdock:read",
+                "scope": "fengdock:read fengdock:write",
                 "client_name": "ChatGPT test",
             },
         )
@@ -72,7 +84,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
                 "response_type": "code",
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
-                "scope": "fengdock:read",
+                "scope": "fengdock:read fengdock:write",
                 "state": "client-state",
                 "code_challenge": challenge,
                 "code_challenge_method": "S256",
@@ -113,7 +125,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert payload["token_type"] == "Bearer"
         assert payload["access_token"]
         assert payload["refresh_token"]
-        assert payload["scope"] == "fengdock:read"
+        assert payload["scope"] == "fengdock:read fengdock:write"
 
         authorized = client.post(
             "/mcp",
@@ -145,8 +157,15 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert listed.status_code == 200, listed.text
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 11
-        assert {tool["name"] for tool in tools} >= {"search_todos", "get_finance_overview"}
+        assert len(tools) == 19
+        assert {tool["name"] for tool in tools} >= {
+            "search_todos",
+            "get_finance_overview",
+            "search_conclusions",
+            "create_conclusion",
+            "update_conclusion",
+            "list_decision_models",
+        }
         schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools}
         assert schemas["list_scrums"]["status"]["default"] == "active"
         assert schemas["list_scrums"]["include_tasks"]["default"] is False
@@ -154,6 +173,98 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert schemas["search_todos"]["include_details"]["default"] is False
         assert schemas["get_finance_overview"]["months_limit"]["default"] == 1
         assert schemas["get_investments"]["snapshot_limit"]["default"] == 1
+        assert schemas["list_conclusions"]["limit"]["default"] == 50
+
+
+def test_conclusion_writes_require_write_scope(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        module,
+        "get_access_token",
+        lambda: SimpleNamespace(scopes=["fengdock:read"]),
+    )
+
+    def attempt_write():
+        with pytest.raises(ToolError, match="fengdock:write"):
+            asyncio.run(
+                module.create_conclusion(
+                    title="Blocked write",
+                    question="Should this be written?",
+                    conclusion="No.",
+                    reason="The token is read-only.",
+                    category="Test",
+                    confidence="High",
+                )
+            )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        executor.submit(attempt_write).result()
+
+
+def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+
+    async def scenario():
+        created = await module.create_conclusion(
+            title="Keep an emergency fund",
+            question="Should emergency cash be invested?",
+            conclusion="Keep six months of expenses liquid.",
+            reason="Availability matters more than maximizing return.",
+            category="Finance",
+            confidence="High",
+            tags=["Emergency Fund", "Safety"],
+        )
+        assert created["id"] == 1
+        assert created["decisionAnalysis"] == {"version": 1, "models": []}
+
+        listed = await module.list_conclusions(limit=10)
+        assert listed["count"] == 1
+        searched = await module.search_conclusions(
+            query="liquid",
+            category="finance",
+            tag="emergency fund",
+            limit=10,
+        )
+        assert searched["items"] == [created]
+        assert await module.get_conclusion(conclusion_id=1) == created
+
+        models = await module.list_decision_models()
+        assert models["count"] == 7
+        reversibility = await module.get_decision_model(model_id="reversibility")
+        assert reversibility["name"] == "可逆性判断"
+
+        updated = await module.update_conclusion(
+            conclusion_id=1,
+            expected_updated_at=created["updatedAt"],
+            conclusion="Keep six months of expenses liquid and separate.",
+        )
+        assert updated["conclusion"].endswith("and separate.")
+
+        custom = await module.create_decision_model(
+            model_id="constraint-check",
+            name="约束检查",
+            short_name="CONSTRAINTS",
+            description="检查必须满足的硬约束。",
+            prompts=[
+                {
+                    "key": "hardConstraints",
+                    "label": "硬约束",
+                    "placeholder": "哪些条件不能违反？",
+                }
+            ],
+        )
+        assert custom["id"] == "constraint-check"
+        assert custom["isBuiltin"] is False
+
+        with pytest.raises(ToolError, match="currentUpdatedAt"):
+            await module.update_conclusion(
+                conclusion_id=1,
+                expected_updated_at=created["updatedAt"],
+                conclusion="Overwrite a newer decision.",
+            )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        executor.submit(asyncio.run, scenario()).result()
 
 
 def test_finance_results_default_to_latest_month_and_bounded_entries(tmp_path, monkeypatch):

@@ -50,6 +50,7 @@ class PersistentOAuthProvider:
         self.username = os.getenv("MCP_AUTH_USERNAME", "watch")
         self.password = os.getenv("MCP_AUTH_PASSWORD", "")
         self.scope = "fengdock:read"
+        self.scopes = ["fengdock:read", "fengdock:write"]
         self.db_path = Path(os.getenv("MCP_AUTH_DATABASE", "/app/data/mcp-auth.sqlite3"))
         self._init_db()
 
@@ -127,7 +128,7 @@ class PersistentOAuthProvider:
             "redirect_uri_provided_explicitly": params.redirect_uri_provided_explicitly,
             "code_challenge": params.code_challenge,
             "resource": params.resource or self.resource_url,
-            "scopes": params.scopes or [self.scope],
+            "scopes": params.scopes or self.scopes,
         }
         with self._connect() as conn:
             self._cleanup(conn)
@@ -168,7 +169,7 @@ button{{margin-top:22px;padding:11px 18px;border:0;border-radius:8px;background:
 <form action="/login/callback" method="post">
 <input type="hidden" name="nonce" value="{html.escape(nonce, quote=True)}">
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
-<button type="submit"{disabled}>Authorize read-only access</button></form></body></html>"""
+<button type="submit"{disabled}>Authorize read and Conclusion write access</button></form></body></html>"""
         return HTMLResponse(
             content,
             headers={
