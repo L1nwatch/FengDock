@@ -19,6 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Update submodules to latest remote commits
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          # Use the branch configured in .gitmodules for each public submodule.
+          git submodule update --init --remote --recursive
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -46,13 +53,6 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
-      - name: Update submodules to latest remote commits
-        run: |
-          set -euo pipefail
-          git submodule sync --recursive
-          # Use the branch configured in .gitmodules for each submodule.
-          git submodule update --init --remote --recursive
 
       - name: Set up Node (mind-map)
         uses: actions/setup-node@v4
