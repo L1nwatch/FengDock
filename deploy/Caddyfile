@@ -55,6 +55,12 @@ http://vultr.tailde302.ts.net {
         reverse_proxy backend:8003
     }
 
+    @conclusion_app path /conclusion /conclusion/*
+    handle @conclusion_app {
+        uri strip_prefix /conclusion
+        reverse_proxy backend:8006
+    }
+
     @legacy_fire path /static/fire /static/fire/ /static/fire/index.html
     redir @legacy_fire /fire/dashboard 308
 

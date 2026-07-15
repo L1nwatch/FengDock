@@ -64,6 +64,24 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         cwd="/app/vendor/fire",
         env=fire_env,
     )
+    conclusion_env = os.environ.copy()
+    conclusion_env["PYTHONPATH"] = "/app/vendor/conclusion"
+    conclusion_env.setdefault(
+        "CONCLUSION_DATABASE_PATH",
+        "/app/vendor/conclusion/data/conclusion.sqlite3",
+    )
+    conclusion_app = subprocess.Popen(
+        [
+            "/app/.venv/bin/uvicorn",
+            "app.main:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8006",
+        ],
+        cwd="/app/vendor/conclusion",
+        env=conclusion_env,
+    )
     mcp_app = subprocess.Popen(
         [
             "/app/.venv/bin/uvicorn",
@@ -87,7 +105,15 @@ def _spawn() -> list[subprocess.Popen[bytes]]:
         cwd="/app/vendor/celpip-exam-simulation",
         env=celpip_env,
     )
-    return [fengdock, triggertodo, codex_proxy, fire_app, celpip_app, mcp_app]
+    return [
+        fengdock,
+        triggertodo,
+        codex_proxy,
+        fire_app,
+        celpip_app,
+        mcp_app,
+        conclusion_app,
+    ]
 
 
 def _terminate(processes: list[subprocess.Popen[bytes]]) -> None:

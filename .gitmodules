@@ -14,3 +14,7 @@
 	path = vendor/celpip-exam-simulation
 	url = https://github.com/L1nwatch/celpip-exam-simulation.git
 	branch = main
+[submodule "vendor/conclusion"]
+	path = vendor/conclusion
+	url = https://github.com/L1nwatch/conclusion.git
+	branch = main

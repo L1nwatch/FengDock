@@ -18,9 +18,11 @@ services:
       MCP_AUTH_PASSWORD: ${MCP_AUTH_PASSWORD:-}
       MCP_AUTH_DATABASE: /app/data/mcp-auth.sqlite3
       FIRE_DATABASE_PATH: /app/vendor/fire/data/fire.sqlite3
+      CONCLUSION_DATABASE_PATH: /app/vendor/conclusion/data/conclusion.sqlite3
     volumes:
       - backend_db:/app/data
       - backend_db:/app/vendor/fire/data
+      - backend_db:/app/vendor/conclusion/data
       - ./vendor/celpip-exam-simulation/materials/private/packs:/app/vendor/celpip-exam-simulation/materials/private/packs:ro
       - ./scripts/run_servers.py:/app/scripts/run_servers.py:ro
       - ./deploy/codex_proxy_with_interception.py:/app/codex_proxy_with_interception.py:ro

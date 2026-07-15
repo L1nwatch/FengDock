@@ -105,6 +105,20 @@ jobs:
           npm ci
           VITE_API_BASE=/fire npm run build -- --base=/fire/
 
+      - name: Set up Node (Conclusion frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vendor/conclusion/frontend/package-lock.json
+
+      - name: Build Conclusion frontend assets
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/vendor/conclusion/frontend"
+          npm ci
+          VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

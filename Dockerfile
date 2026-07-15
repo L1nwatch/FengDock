@@ -20,6 +20,16 @@ RUN npm ci
 COPY vendor/fire/frontend ./
 RUN VITE_API_BASE=/fire npm run build -- --base=/fire/
 
+FROM node:20-alpine AS conclusion_frontend_builder
+
+WORKDIR /app/vendor/conclusion/frontend
+
+COPY vendor/conclusion/frontend/package*.json ./
+RUN npm ci
+
+COPY vendor/conclusion/frontend ./
+RUN VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/
+
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -44,6 +54,7 @@ RUN cd /app/vendor/TriggerToDo && UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen 
 COPY app ./app
 COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY vendor/fire/app ./vendor/fire/app
+COPY vendor/conclusion/app ./vendor/conclusion/app
 COPY vendor/celpip-exam-simulation/server.py ./vendor/celpip-exam-simulation/server.py
 COPY vendor/celpip-exam-simulation/webapp ./vendor/celpip-exam-simulation/webapp
 COPY index.html ./index.html
@@ -68,6 +79,8 @@ COPY vendor/TriggerToDo/app ./vendor/TriggerToDo/app
 COPY --from=triggertodo_frontend_builder /app/vendor/TriggerToDo/frontend/dist ./vendor/TriggerToDo/frontend/dist
 COPY vendor/fire/app ./vendor/fire/app
 COPY --from=fire_frontend_builder /app/vendor/fire/frontend/dist ./vendor/fire/frontend/dist
+COPY vendor/conclusion/app ./vendor/conclusion/app
+COPY --from=conclusion_frontend_builder /app/vendor/conclusion/frontend/dist ./vendor/conclusion/frontend/dist
 COPY vendor/celpip-exam-simulation/server.py ./vendor/celpip-exam-simulation/server.py
 COPY vendor/celpip-exam-simulation/webapp ./vendor/celpip-exam-simulation/webapp
 RUN mkdir -p ./vendor/celpip-exam-simulation/materials/private/packs
@@ -81,4 +94,5 @@ EXPOSE 8000
 EXPOSE 8001
 EXPOSE 8004
 EXPOSE 8005
+EXPOSE 8006
 CMD ["python", "scripts/run_servers.py"]
