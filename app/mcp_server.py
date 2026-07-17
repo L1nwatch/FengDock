@@ -1,4 +1,4 @@
-"""Authenticated, read-only MCP facade for TriggerToDo and Fire."""
+"""Authenticated MCP facade for FengDock applications."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
+from mcp.server.auth.routes import create_protected_resource_routes
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -886,3 +887,13 @@ async def create_decision_model(
 
 
 app = mcp.streamable_http_app()
+
+# FastMCP currently derives RFC 9728 ``scopes_supported`` from the scopes that
+# every MCP request must have.  FengDock only requires read access globally and
+# checks write access inside mutating Conclusion tools, so advertise the wider
+# supported set through a higher-priority metadata route.
+app.routes[0:0] = create_protected_resource_routes(
+    resource_url=AnyHttpUrl(provider.resource_url),
+    authorization_servers=[AnyHttpUrl(provider.public_url)],
+    scopes_supported=provider.scopes,
+)

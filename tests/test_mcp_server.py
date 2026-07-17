@@ -35,6 +35,10 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         metadata = client.get("/.well-known/oauth-protected-resource/mcp")
         assert metadata.status_code == 200
         assert metadata.json()["resource"] == "https://watch0.top/mcp"
+        assert metadata.json()["scopes_supported"] == [
+            "fengdock:read",
+            "fengdock:write",
+        ]
 
         unauthorized = client.post(
             "/mcp",
