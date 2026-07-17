@@ -27,3 +27,4 @@ def test_homepage_links_json_tool():
     assert "/static/todo/board/waiting-trigger" in response.text
     assert "/celpip/webapp/index.html?view=overview" in response.text
     assert "/conclusion/" in response.text
+    assert "/timeline_app/" not in response.text
