@@ -3,6 +3,16 @@
     admin off
 }
 
+xedoc.watch0.top {
+    encode gzip zstd
+    reverse_proxy host.docker.internal:8318
+
+    log {
+        output stdout
+        format console
+    }
+}
+
 http://vultr.tailde302.ts.net {
     @codex_response path /codex-response /codex-response/*
     handle @codex_response {
