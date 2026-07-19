@@ -234,8 +234,25 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
 
         models = await module.list_decision_models()
         assert models["count"] == 7
+        assert list(models["models"]) == [
+            "precedent-review",
+            "munger-checklist",
+            "scenario-range",
+            "time-horizons",
+            "inversion",
+            "inaction-value",
+            "reversibility",
+        ]
+        assert set(models["models"]["time-horizons"]) == {"name", "explanation"}
+        assert "every model" in models["usage"]
         reversibility = await module.get_decision_model(model_id="reversibility")
-        assert reversibility["name"] == "可逆性判断"
+        assert reversibility == {
+            "modelId": "reversibility",
+            "model": {
+                "name": "可逆性判断",
+                "explanation": models["models"]["reversibility"]["explanation"],
+            },
+        }
 
         updated = await module.update_conclusion(
             conclusion_id=1,
@@ -247,18 +264,15 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         custom = await module.create_decision_model(
             model_id="constraint-check",
             name="约束检查",
-            short_name="CONSTRAINTS",
-            description="检查必须满足的硬约束。",
-            prompts=[
-                {
-                    "key": "hardConstraints",
-                    "label": "硬约束",
-                    "placeholder": "哪些条件不能违反？",
-                }
-            ],
+            explanation="检查必须满足的硬约束，并找出最先限制结果的瓶颈。",
         )
-        assert custom["id"] == "constraint-check"
-        assert custom["isBuiltin"] is False
+        assert custom == {
+            "modelId": "constraint-check",
+            "model": {
+                "name": "约束检查",
+                "explanation": "检查必须满足的硬约束，并找出最先限制结果的瓶颈。",
+            },
+        }
 
         with pytest.raises(ToolError, match="currentUpdatedAt"):
             await module.update_conclusion(

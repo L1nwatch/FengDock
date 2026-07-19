@@ -118,6 +118,8 @@ bounded read tools plus explicit non-destructive write tools:
 - `create_conclusion`, `update_conclusion`
 - `list_decision_models`, `get_decision_model`, `create_decision_model`
 
+Decision models are concise guides (`name` + `explanation`). When asked to use them, the MCP workflow applies every registered model briefly before forming the final Conclusion.
+
 Conclusion does not expose deletion through MCP. Updates require the last observed `updatedAt` value,
 so concurrent UI or MCP changes return a conflict instead of being silently overwritten.
 

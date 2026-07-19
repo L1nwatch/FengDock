@@ -10,7 +10,7 @@ import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -163,11 +163,9 @@ def _serialize_conclusion_page(schemas: Any, page: dict[str, Any]) -> dict[str, 
     }
 
 
-def _serialize_decision_model(schemas: Any, record: dict[str, Any]) -> dict[str, Any]:
-    return schemas.DecisionModelRecord.model_validate(record).model_dump(
-        by_alias=True,
-        mode="json",
-    )
+def _decision_model_guide(record: dict[str, Any]) -> dict[str, str]:
+    """Expose only the two business fields an AI needs to apply a model."""
+    return {"name": record["name"], "explanation": record["explanation"]}
 
 
 def _validation_tool_error(error: ValidationError) -> ToolError:
@@ -703,7 +701,15 @@ async def create_conclusion(
     tradeoffs: str = "",
     conditions: str = "",
     tags: list[str] | None = None,
-    decision_analysis: dict[str, Any] | None = None,
+    decision_analysis: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description=(
+                "If thinking models were requested, include every registered model with "
+                "one short answers.analysis value"
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Create a Conclusion only when the user explicitly asks to save the decision."""
     _require_conclusion_write_scope()
@@ -753,7 +759,15 @@ async def update_conclusion(
     category: str | None = None,
     tags: list[str] | None = None,
     confidence: Literal["High", "Medium", "Low"] | None = None,
-    decision_analysis: dict[str, Any] | None = None,
+    decision_analysis: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description=(
+                "If thinking models were requested, include every registered model with "
+                "one short answers.analysis value"
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Update specified Conclusion fields with optimistic concurrency protection."""
     _require_conclusion_write_scope()
@@ -807,10 +821,10 @@ async def update_conclusion(
 
 @mcp.tool(annotations=read_only)
 async def list_decision_models() -> dict[str, Any]:
-    """List registered decision models before selecting perspectives for an analysis."""
+    """Return every thinking model. Apply all of them once, briefly, when requested."""
 
     def read() -> dict[str, Any]:
-        db, schemas = _conclusion_modules()
+        db, _ = _conclusion_modules()
         try:
             with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
                 result = db.list_decision_models(connection)
@@ -818,9 +832,15 @@ async def list_decision_models() -> dict[str, Any]:
             raise ToolError("Decision models are currently unavailable") from exc
         return {
             "count": result["count"],
-            "items": [
-                _serialize_decision_model(schemas, record) for record in result["items"]
-            ],
+            "usage": (
+                "When the user asks to use the thinking models, analyze the decision "
+                "with every model below in order. Give each model a short, concrete "
+                "analysis; state missing information as an assumption and do not invent facts."
+            ),
+            "models": {
+                record["id"]: _decision_model_guide(record)
+                for record in result["items"]
+            },
         }
 
     return await asyncio.to_thread(read)
@@ -830,10 +850,10 @@ async def list_decision_models() -> dict[str, Any]:
 async def get_decision_model(
     model_id: str = Field(min_length=2, max_length=64),
 ) -> dict[str, Any]:
-    """Get the ordered prompts and source for one registered decision model."""
+    """Get one thinking model as a short name and explanation."""
 
     def read() -> dict[str, Any]:
-        db, schemas = _conclusion_modules()
+        db, _ = _conclusion_modules()
         try:
             with db.connect(CONCLUSION_DATABASE_PATH, read_only=True) as connection:
                 record = db.get_decision_model(connection, model_id)
@@ -841,7 +861,7 @@ async def get_decision_model(
             raise ToolError("Decision models are currently unavailable") from exc
         if record is None:
             raise ToolError(f"Decision model {model_id} was not found")
-        return _serialize_decision_model(schemas, record)
+        return {"modelId": record["id"], "model": _decision_model_guide(record)}
 
     return await asyncio.to_thread(read)
 
@@ -850,13 +870,13 @@ async def get_decision_model(
 async def create_decision_model(
     model_id: str = Field(min_length=2, max_length=64),
     name: str = Field(min_length=1, max_length=120),
-    short_name: str = Field(min_length=1, max_length=80),
-    description: str = Field(min_length=1, max_length=500),
-    prompts: list[dict[str, str]] = Field(min_length=1, max_length=20),
-    source_name: str = "",
-    source_url: str = "",
+    explanation: str = Field(
+        min_length=1,
+        max_length=800,
+        description="A few concise sentences, with at most one short example",
+    ),
 ) -> dict[str, Any]:
-    """Register an immutable version-one custom decision model."""
+    """Register a thinking model with only a name and concise explanation."""
     _require_conclusion_write_scope()
 
     def write() -> dict[str, Any]:
@@ -864,11 +884,7 @@ async def create_decision_model(
         payload = {
             "id": model_id,
             "name": name,
-            "shortName": short_name,
-            "description": description,
-            "prompts": prompts,
-            "sourceName": source_name,
-            "sourceUrl": source_url,
+            "explanation": explanation,
         }
         try:
             validated = schemas.DecisionModelCreate.model_validate(payload)
@@ -881,7 +897,7 @@ async def create_decision_model(
             raise ToolError(f"Decision model {model_id} already exists") from None
         except sqlite3.Error as exc:
             raise ToolError("Decision model could not be created") from exc
-        return _serialize_decision_model(schemas, record)
+        return {"modelId": record["id"], "model": _decision_model_guide(record)}
 
     return await asyncio.to_thread(write)
 
