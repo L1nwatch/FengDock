@@ -173,5 +173,8 @@ jobs:
             MCP_AUTH_USERNAME="$MCP_AUTH_USERNAME" \
             MCP_AUTH_PASSWORD="$MCP_AUTH_PASSWORD" \
               docker compose up -d --remove-orphans
+            if ! docker network inspect fengdock_fengdock --format '{{range .Containers}}{{println .Name}}{{end}}' | grep -Fxq cli-proxy-management-center; then
+              docker network connect fengdock_fengdock cli-proxy-management-center
+            fi
             docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile || docker compose up -d --force-recreate caddy
             docker image prune -f

@@ -5,7 +5,7 @@
 
 xedoc.watch0.top {
     encode gzip zstd
-    reverse_proxy 173.199.70.145:8318
+    reverse_proxy cli-proxy-management-center:80
 
     log {
         output stdout
