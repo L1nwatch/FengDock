@@ -62,6 +62,7 @@ Database ownership in runtime container:
 1. Create `.env` on the server based on `.env.example`, setting at minimum:
    - `GHCR_IMAGE=ghcr.io/<your-gh-username>/fengdock:latest`
    - `DOMAIN=your.domain`
+   - `OPENAI_API_KEY=` (populated from the matching GitHub Actions secret during deployment)
    - Optional: `CADDY_GLOBAL_OPTIONS="email you@example.com"`
    - Optional TriggerToDo overrides:
      - `TRIGGERTODO_DATABASE_URL=sqlite:////app/data/triggertodo.db`
@@ -87,6 +88,7 @@ Add these secrets at repository level:
 - `DEPLOY_USER` – SSH user
 - `DEPLOY_PATH` – absolute path of the repo on the server
 - `DEPLOY_SSH_KEY` – private key with access to the VPS
+- `OPENAI_API_KEY` – required for CELPIP Writing/Speaking AI grading and written to the production `.env`
 - `MCP_AUTH_PASSWORD` – required password for authorizing ChatGPT MCP access
 
 Optional repository variables:
