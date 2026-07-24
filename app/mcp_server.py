@@ -841,6 +841,10 @@ async def list_decision_models() -> dict[str, Any]:
                 record["id"]: _decision_model_guide(record)
                 for record in result["items"]
             },
+            "versions": {
+                record["id"]: record["version"]
+                for record in result["items"]
+            },
         }
 
     return await asyncio.to_thread(read)
@@ -861,7 +865,11 @@ async def get_decision_model(
             raise ToolError("Decision models are currently unavailable") from exc
         if record is None:
             raise ToolError(f"Decision model {model_id} was not found")
-        return {"modelId": record["id"], "model": _decision_model_guide(record)}
+        return {
+            "modelId": record["id"],
+            "version": record["version"],
+            "model": _decision_model_guide(record),
+        }
 
     return await asyncio.to_thread(read)
 
@@ -897,7 +905,65 @@ async def create_decision_model(
             raise ToolError(f"Decision model {model_id} already exists") from None
         except sqlite3.Error as exc:
             raise ToolError("Decision model could not be created") from exc
-        return {"modelId": record["id"], "model": _decision_model_guide(record)}
+        return {
+            "modelId": record["id"],
+            "version": record["version"],
+            "model": _decision_model_guide(record),
+        }
+
+    return await asyncio.to_thread(write)
+
+
+@mcp.tool(annotations=write_tool)
+async def update_decision_model(
+    model_id: str = Field(min_length=2, max_length=64),
+    expected_version: int = Field(
+        ge=1,
+        description="Version returned by list_decision_models or get_decision_model",
+    ),
+    name: str = Field(min_length=1, max_length=120),
+    explanation: str = Field(
+        min_length=1,
+        max_length=800,
+        description="A few concise sentences, with at most one short example",
+    ),
+) -> dict[str, Any]:
+    """Update a thinking model by creating its next immutable version."""
+    _require_conclusion_write_scope()
+
+    def write() -> dict[str, Any]:
+        db, schemas = _conclusion_modules()
+        payload = {
+            "name": name,
+            "explanation": explanation,
+            "expectedVersion": expected_version,
+        }
+        try:
+            validated = schemas.DecisionModelUpdate.model_validate(payload)
+            with db.connect(CONCLUSION_DATABASE_PATH) as connection:
+                db.init_db(connection)
+                record = db.update_decision_model(
+                    connection,
+                    model_id,
+                    validated.model_dump(exclude={"expected_version"}),
+                    expected_version=validated.expected_version,
+                )
+        except ValidationError as exc:
+            raise _validation_tool_error(exc) from None
+        except db.DecisionModelUpdateConflictError as exc:
+            raise ToolError(
+                "Decision model was changed by another writer; "
+                f"currentVersion={exc.current_version}"
+            ) from None
+        except sqlite3.Error as exc:
+            raise ToolError("Decision model could not be updated") from exc
+        if record is None:
+            raise ToolError(f"Decision model {model_id} was not found")
+        return {
+            "modelId": record["id"],
+            "version": record["version"],
+            "model": _decision_model_guide(record),
+        }
 
     return await asyncio.to_thread(write)
 

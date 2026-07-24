@@ -51,7 +51,12 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
     tools = module.mcp._tool_manager.list_tools()
     assert tools
     by_name = {tool.name: tool for tool in tools}
-    write_names = {"create_conclusion", "update_conclusion", "create_decision_model"}
+    write_names = {
+        "create_conclusion",
+        "update_conclusion",
+        "create_decision_model",
+        "update_decision_model",
+    }
     assert {name for name, tool in by_name.items() if not tool.annotations.readOnlyHint} == write_names
     assert all(
         tool.annotations and tool.annotations.readOnlyHint is True
@@ -161,7 +166,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert listed.status_code == 200, listed.text
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 19
+        assert len(tools) == 20
         assert {tool["name"] for tool in tools} >= {
             "search_todos",
             "get_finance_overview",
@@ -169,6 +174,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
             "create_conclusion",
             "update_conclusion",
             "list_decision_models",
+            "update_decision_model",
         }
         schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools}
         assert schemas["list_scrums"]["status"]["default"] == "active"
@@ -244,10 +250,12 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
             "reversibility",
         ]
         assert set(models["models"]["time-horizons"]) == {"name", "explanation"}
+        assert models["versions"]["time-horizons"] == 1
         assert "every model" in models["usage"]
         reversibility = await module.get_decision_model(model_id="reversibility")
         assert reversibility == {
             "modelId": "reversibility",
+            "version": 1,
             "model": {
                 "name": "可逆性判断",
                 "explanation": models["models"]["reversibility"]["explanation"],
@@ -268,11 +276,33 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         )
         assert custom == {
             "modelId": "constraint-check",
+            "version": 1,
             "model": {
                 "name": "约束检查",
                 "explanation": "检查必须满足的硬约束，并找出最先限制结果的瓶颈。",
             },
         }
+        updated_model = await module.update_decision_model(
+            model_id="constraint-check",
+            expected_version=1,
+            name="关键约束检查",
+            explanation="确认硬约束，并找出真正限制结果的瓶颈。",
+        )
+        assert updated_model == {
+            "modelId": "constraint-check",
+            "version": 2,
+            "model": {
+                "name": "关键约束检查",
+                "explanation": "确认硬约束，并找出真正限制结果的瓶颈。",
+            },
+        }
+        with pytest.raises(ToolError, match="currentVersion=2"):
+            await module.update_decision_model(
+                model_id="constraint-check",
+                expected_version=1,
+                name="过期修改",
+                explanation="这次更新应该失败。",
+            )
 
         with pytest.raises(ToolError, match="currentUpdatedAt"):
             await module.update_conclusion(
