@@ -845,6 +845,10 @@ async def list_decision_models() -> dict[str, Any]:
                 record["id"]: record["version"]
                 for record in result["items"]
             },
+            "updatedAt": {
+                record["id"]: record["updated_at"]
+                for record in result["items"]
+            },
         }
 
     return await asyncio.to_thread(read)
@@ -868,6 +872,7 @@ async def get_decision_model(
         return {
             "modelId": record["id"],
             "version": record["version"],
+            "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
 
@@ -908,6 +913,7 @@ async def create_decision_model(
         return {
             "modelId": record["id"],
             "version": record["version"],
+            "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
 
@@ -917,9 +923,9 @@ async def create_decision_model(
 @mcp.tool(annotations=write_tool)
 async def update_decision_model(
     model_id: str = Field(min_length=2, max_length=64),
-    expected_version: int = Field(
-        ge=1,
-        description="Version returned by list_decision_models or get_decision_model",
+    expected_updated_at: str = Field(
+        min_length=1,
+        description="updatedAt returned by list_decision_models or get_decision_model",
     ),
     name: str = Field(min_length=1, max_length=120),
     explanation: str = Field(
@@ -928,7 +934,7 @@ async def update_decision_model(
         description="A few concise sentences, with at most one short example",
     ),
 ) -> dict[str, Any]:
-    """Update a thinking model by creating its next immutable version."""
+    """Edit a thinking model definition in place."""
     _require_conclusion_write_scope()
 
     def write() -> dict[str, Any]:
@@ -936,7 +942,7 @@ async def update_decision_model(
         payload = {
             "name": name,
             "explanation": explanation,
-            "expectedVersion": expected_version,
+            "expectedUpdatedAt": expected_updated_at,
         }
         try:
             validated = schemas.DecisionModelUpdate.model_validate(payload)
@@ -945,15 +951,15 @@ async def update_decision_model(
                 record = db.update_decision_model(
                     connection,
                     model_id,
-                    validated.model_dump(exclude={"expected_version"}),
-                    expected_version=validated.expected_version,
+                    validated.model_dump(exclude={"expected_updated_at"}),
+                    expected_updated_at=validated.expected_updated_at,
                 )
         except ValidationError as exc:
             raise _validation_tool_error(exc) from None
         except db.DecisionModelUpdateConflictError as exc:
             raise ToolError(
                 "Decision model was changed by another writer; "
-                f"currentVersion={exc.current_version}"
+                f"currentUpdatedAt={exc.current_updated_at}"
             ) from None
         except sqlite3.Error as exc:
             raise ToolError("Decision model could not be updated") from exc
@@ -962,6 +968,7 @@ async def update_decision_model(
         return {
             "modelId": record["id"],
             "version": record["version"],
+            "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
 

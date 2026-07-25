@@ -57,6 +57,7 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         "create_decision_model",
         "update_decision_model",
     }
+    assert "delete_decision_model" not in by_name
     assert {name for name, tool in by_name.items() if not tool.annotations.readOnlyHint} == write_names
     assert all(
         tool.annotations and tool.annotations.readOnlyHint is True
@@ -184,6 +185,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert schemas["get_finance_overview"]["months_limit"]["default"] == 1
         assert schemas["get_investments"]["snapshot_limit"]["default"] == 1
         assert schemas["list_conclusions"]["limit"]["default"] == 50
+        assert "delete_decision_model" not in schemas
 
 
 def test_conclusion_writes_require_write_scope(tmp_path, monkeypatch):
@@ -251,11 +253,13 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         ]
         assert set(models["models"]["time-horizons"]) == {"name", "explanation"}
         assert models["versions"]["time-horizons"] == 1
+        assert models["updatedAt"]["time-horizons"]
         assert "every model" in models["usage"]
         reversibility = await module.get_decision_model(model_id="reversibility")
         assert reversibility == {
             "modelId": "reversibility",
             "version": 1,
+            "updatedAt": models["updatedAt"]["reversibility"],
             "model": {
                 "name": "可逆性判断",
                 "explanation": models["models"]["reversibility"]["explanation"],
@@ -277,6 +281,7 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         assert custom == {
             "modelId": "constraint-check",
             "version": 1,
+            "updatedAt": custom["updatedAt"],
             "model": {
                 "name": "约束检查",
                 "explanation": "检查必须满足的硬约束，并找出最先限制结果的瓶颈。",
@@ -284,22 +289,24 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         }
         updated_model = await module.update_decision_model(
             model_id="constraint-check",
-            expected_version=1,
+            expected_updated_at=custom["updatedAt"],
             name="关键约束检查",
             explanation="确认硬约束，并找出真正限制结果的瓶颈。",
         )
         assert updated_model == {
             "modelId": "constraint-check",
-            "version": 2,
+            "version": 1,
+            "updatedAt": updated_model["updatedAt"],
             "model": {
                 "name": "关键约束检查",
                 "explanation": "确认硬约束，并找出真正限制结果的瓶颈。",
             },
         }
-        with pytest.raises(ToolError, match="currentVersion=2"):
+        assert updated_model["updatedAt"] != custom["updatedAt"]
+        with pytest.raises(ToolError, match="currentUpdatedAt="):
             await module.update_decision_model(
                 model_id="constraint-check",
-                expected_version=1,
+                expected_updated_at=custom["updatedAt"],
                 name="过期修改",
                 explanation="这次更新应该失败。",
             )

@@ -123,8 +123,9 @@ bounded read tools plus explicit non-destructive write tools:
 Decision models are concise guides (`name` + `explanation`). When asked to use them, the MCP workflow applies every registered model briefly before forming the final Conclusion.
 
 Conclusion does not expose deletion through MCP. Conclusion updates require the last observed
-`updatedAt`; decision-model updates require the last observed version and create a new immutable
-version. Concurrent UI or MCP changes return a conflict instead of being silently overwritten.
+`updatedAt`; decision-model updates also require their last observed `updatedAt` and edit the
+current definition in place. Concurrent UI or MCP changes return a conflict instead of being
+silently overwritten. Decision-model deletion is available only from the website.
 
 The deploy workflow injects these values into Docker Compose. Configure `MCP_AUTH_PASSWORD` as a
 GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repository variables:
