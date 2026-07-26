@@ -252,13 +252,12 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
             "reversibility",
         ]
         assert set(models["models"]["time-horizons"]) == {"name", "explanation"}
-        assert models["versions"]["time-horizons"] == 1
+        assert "versions" not in models
         assert models["updatedAt"]["time-horizons"]
         assert "every model" in models["usage"]
         reversibility = await module.get_decision_model(model_id="reversibility")
         assert reversibility == {
             "modelId": "reversibility",
-            "version": 1,
             "updatedAt": models["updatedAt"]["reversibility"],
             "model": {
                 "name": "可逆性判断",
@@ -280,7 +279,6 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         )
         assert custom == {
             "modelId": "constraint-check",
-            "version": 1,
             "updatedAt": custom["updatedAt"],
             "model": {
                 "name": "约束检查",
@@ -295,7 +293,6 @@ def test_conclusion_mcp_tools_support_search_analysis_and_safe_writes(tmp_path, 
         )
         assert updated_model == {
             "modelId": "constraint-check",
-            "version": 1,
             "updatedAt": updated_model["updatedAt"],
             "model": {
                 "name": "关键约束检查",

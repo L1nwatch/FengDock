@@ -841,10 +841,6 @@ async def list_decision_models() -> dict[str, Any]:
                 record["id"]: _decision_model_guide(record)
                 for record in result["items"]
             },
-            "versions": {
-                record["id"]: record["version"]
-                for record in result["items"]
-            },
             "updatedAt": {
                 record["id"]: record["updated_at"]
                 for record in result["items"]
@@ -871,7 +867,6 @@ async def get_decision_model(
             raise ToolError(f"Decision model {model_id} was not found")
         return {
             "modelId": record["id"],
-            "version": record["version"],
             "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
@@ -912,7 +907,6 @@ async def create_decision_model(
             raise ToolError("Decision model could not be created") from exc
         return {
             "modelId": record["id"],
-            "version": record["version"],
             "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
@@ -967,7 +961,6 @@ async def update_decision_model(
             raise ToolError(f"Decision model {model_id} was not found")
         return {
             "modelId": record["id"],
-            "version": record["version"],
             "updatedAt": record["updated_at"],
             "model": _decision_model_guide(record),
         }
