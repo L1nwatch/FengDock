@@ -5,7 +5,7 @@ FengDock is a personal portal that pairs a FastAPI backend with bundled apps and
 Personal portal composed of:
 
 - **FastAPI backend** (`app/`) serving the homepage links API and background link-health jobs.
-- **Static frontend** (`index.html`, `static/`, `tools/`) with the periodic-table home, JSON viewer, and mobile rehab executor.
+- **Static frontend** (`index.html`, `static/`, `tools/`, `exercises/`) with the periodic-table home, JSON viewer, and mobile rehab executor.
 - **Caddy reverse proxy** (see `deploy/Caddyfile`) shipping alongside the backend via Docker compose.
 
 Everything is tested and deployed through GitHub Actions → GHCR → SSH redeploy on the VPS.

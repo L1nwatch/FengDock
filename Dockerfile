@@ -60,6 +60,7 @@ COPY vendor/celpip-exam-simulation/webapp ./vendor/celpip-exam-simulation/webapp
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
+COPY exercises ./exercises
 COPY scripts ./scripts
 
 FROM python:3.12-slim AS runtime
@@ -87,6 +88,7 @@ RUN mkdir -p ./vendor/celpip-exam-simulation/materials/private/packs
 COPY index.html ./index.html
 COPY static ./static
 COPY tools ./tools
+COPY exercises ./exercises
 COPY scripts ./scripts
 COPY pyproject.toml uv.lock ./
 

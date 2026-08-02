@@ -21,7 +21,7 @@ Concise index for common development and operations references.
 - [scripts/run_servers.py](scripts/run_servers.py) - starts FengDock, TriggerToDo, Codex proxy, and Fire in the container.
 - [deploy/codex_proxy_with_interception.py](deploy/codex_proxy_with_interception.py) - Codex proxy with JSONL interaction logging.
 - [tools/json-viewer.html](tools/json-viewer.html) - standalone JSON viewer served at `/tools/json-viewer`.
-- [tools/exercises.html](tools/exercises.html) - standalone mobile rehab executor served at `/tools/exercises`; device-local history and progression logic live under `static/tools/exercises/`.
+- [exercises/index.html](exercises/index.html) - standalone mobile rehab executor served under `/exercises/`; device-local history and progression logic live under `static/exercises/`.
 
 ## Tests
 

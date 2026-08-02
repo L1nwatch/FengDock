@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
@@ -35,6 +35,7 @@ FRONTEND_ROOT = Path(__file__).resolve().parent.parent
 INDEX_FILE = FRONTEND_ROOT / "index.html"
 TOOLS_DIR = FRONTEND_ROOT / "tools"
 STATIC_DIR = FRONTEND_ROOT / "static"
+EXERCISES_DIR = FRONTEND_ROOT / "exercises"
 
 
 def create_app() -> FastAPI:
@@ -42,6 +43,13 @@ def create_app() -> FastAPI:
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    if EXERCISES_DIR.exists():
+        app.mount(
+            "/exercises",
+            StaticFiles(directory=EXERCISES_DIR, html=True),
+            name="exercises",
+        )
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     async def root() -> str:
@@ -62,17 +70,13 @@ def create_app() -> FastAPI:
     async def json_viewer_head() -> Response:
         return Response(status_code=200)
 
-    @app.get("/tools/exercises", response_class=HTMLResponse, include_in_schema=False)
-    async def exercises() -> str:
-        exercises_file = TOOLS_DIR / "exercises.html"
-        try:
-            return exercises_file.read_text(encoding="utf-8")
-        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
-            raise HTTPException(status_code=404, detail="Exercises app not available") from exc
+    @app.get("/tools/exercises", include_in_schema=False)
+    async def legacy_exercises() -> RedirectResponse:
+        return RedirectResponse(url="/exercises/", status_code=308)
 
     @app.head("/tools/exercises", include_in_schema=False)
-    async def exercises_head() -> Response:
-        return Response(status_code=200)
+    async def legacy_exercises_head() -> RedirectResponse:
+        return RedirectResponse(url="/exercises/", status_code=308)
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
