@@ -110,6 +110,10 @@ http://vultr.tailde302.ts.net {
         redir @json_viewer /tools/json-viewer.html 302
         @json_viewer_slash path "/tools/json-viewer/"
         redir @json_viewer_slash /tools/json-viewer.html 302
+        @exercises path "/tools/exercises"
+        redir @exercises /tools/exercises.html 302
+        @exercises_slash path "/tools/exercises/"
+        redir @exercises_slash /tools/exercises.html 302
         try_files {path} /index.html
         file_server
     }

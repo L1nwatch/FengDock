@@ -24,6 +24,8 @@ def test_homepage_links_json_tool():
     response = client.get("/")
     assert response.status_code == 200
     assert "/tools/json-viewer" in response.text
+    assert "/tools/exercises" in response.text
+    assert "watch0.top/articles" not in response.text
     assert "/static/todo/board/waiting-trigger" in response.text
     assert "/celpip/webapp/index.html?view=overview" in response.text
     assert "/conclusion/" in response.text

@@ -62,6 +62,18 @@ def create_app() -> FastAPI:
     async def json_viewer_head() -> Response:
         return Response(status_code=200)
 
+    @app.get("/tools/exercises", response_class=HTMLResponse, include_in_schema=False)
+    async def exercises() -> str:
+        exercises_file = TOOLS_DIR / "exercises.html"
+        try:
+            return exercises_file.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+            raise HTTPException(status_code=404, detail="Exercises app not available") from exc
+
+    @app.head("/tools/exercises", include_in_schema=False)
+    async def exercises_head() -> Response:
+        return Response(status_code=200)
+
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}

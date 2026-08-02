@@ -5,7 +5,7 @@ FengDock is a personal portal that pairs a FastAPI backend with bundled apps and
 Personal portal composed of:
 
 - **FastAPI backend** (`app/`) serving the homepage links API and background link-health jobs.
-- **Static frontend** (`index.html`, `static/`, `tools/`) with the periodic-table home and JSON viewer.
+- **Static frontend** (`index.html`, `static/`, `tools/`) with the periodic-table home, JSON viewer, and mobile rehab executor.
 - **Caddy reverse proxy** (see `deploy/Caddyfile`) shipping alongside the backend via Docker compose.
 
 Everything is tested and deployed through GitHub Actions → GHCR → SSH redeploy on the VPS.
@@ -40,7 +40,7 @@ Everything is tested and deployed through GitHub Actions → GHCR → SSH redepl
 - **Frontend cache busting**: whenever `static/**` JS/CSS changes, bump the `?v=` query string in the relevant template under `tools/` so browsers fetch the new asset.
 - **Proxy awareness**: new routes or static pages usually need a matching stanza in `deploy/Caddyfile`, plus the runtime Dockerfile must copy any new templates/assets.
 - **Tests before push**: `PYTHONPATH=. .venv/bin/pytest` (this runs unit + Playwright UI tests). CI blocks deployments if the suite fails.
-- **Shared footer**: the JSON viewer injects the footer from `static/common/footer.html` via `static/common/footer.js`; reuse that snippet for any new tool pages to keep styling consistent.
+- **Shared footer**: standalone tools inject the footer from `static/common/footer.html` via `static/common/footer.js`; reuse that snippet for any new tool pages to keep styling consistent.
 
 To run the stack with Caddy locally:
 
