@@ -1,0 +1,189 @@
+{
+  "version": "f7a924c5a27a",
+  "language": "en-US",
+  "model": "tts-1-hd",
+  "voice": "nova",
+  "generated_at": "2026-08-02T19:19:42Z",
+  "cues": {
+    "voice_enabled": {
+      "file": "voice_enabled.901ab9f89750.mp3",
+      "text": "Audio guidance is on.",
+      "sha256": "901ab9f89750406f9f41a8ad463b1027b5ad89d514e2585f583873239781df62"
+    },
+    "countdown": {
+      "file": "countdown.5e9474f3ff81.mp3",
+      "text": "Three, two, one.",
+      "sha256": "5e9474f3ff815bd7130cb1fcae97304ed827b5c403b3b557d74a160bf9c397a8"
+    },
+    "exercise_complete": {
+      "file": "exercise_complete.b4ee08de9b21.mp3",
+      "text": "Exercise complete. How did that feel?",
+      "sha256": "b4ee08de9b21ba841a2b2c27550513d43c5e85d97da9b898b92c711b192dd9ce"
+    },
+    "exercise_skipped": {
+      "file": "exercise_skipped.9bb91c9259d2.mp3",
+      "text": "Exercise skipped. Get ready for the next movement.",
+      "sha256": "9bb91c9259d263626f61f74a95d3d0ce8ddceb3e3fd7f01a11605dee441f36b8"
+    },
+    "paused": {
+      "file": "paused.23df81e8c629.mp3",
+      "text": "Paused. Take your time.",
+      "sha256": "23df81e8c629c213d77a8149bf776bf0405030f0a22c76bf7e62785f3806d486"
+    },
+    "resumed": {
+      "file": "resumed.7eb54ed34b70.mp3",
+      "text": "Let's continue.",
+      "sha256": "7eb54ed34b70f26a00abd26815e1d52b2367ce6f6c717b1b523adf52320a627d"
+    },
+    "feedback_good": {
+      "file": "feedback_good.cb4f7e1733cc.mp3",
+      "text": "Got it. That felt good.",
+      "sha256": "cb4f7e1733cc5b538e1ffe90e5b21a360d3c67e2ba2893e098aae21afae95f44"
+    },
+    "feedback_bad": {
+      "file": "feedback_bad.1378a42df248.mp3",
+      "text": "Got it. We'll keep that in mind.",
+      "sha256": "1378a42df248c9e73660e7c0a37d21ae02fa70073f20dedd9b8ecb842608841a"
+    },
+    "workout_complete": {
+      "file": "workout_complete.649f37f1b5a5.mp3",
+      "text": "Today's session is complete. Nice work.",
+      "sha256": "649f37f1b5a5bfd0f3915faf457dd442ba393b466b0ccc4696e0ec9a20f08c79"
+    },
+    "switch_sides": {
+      "file": "switch_sides.9e2e6870c963.mp3",
+      "text": "Switch sides and get into position.",
+      "sha256": "9e2e6870c9632ba01a91138fd4e1fac111d9a89736a33ac708cbc47a5bfbb236"
+    },
+    "bird_dog_prepare": {
+      "file": "bird_dog_prepare.7c1a384c895f.mp3",
+      "text": "Bird dog. Come onto your hands and knees, find a steady position, and get ready.",
+      "sha256": "7c1a384c895f0eebc75977232e8b816197977714e8f7beeadae845e39dba56f0"
+    },
+    "bird_dog_left_first": {
+      "file": "bird_dog_left_first.f7a924c5a27a.mp3",
+      "text": "Begin. Reach your left arm forward and your right leg back. Keep your pelvis steady and breathe.",
+      "sha256": "f7a924c5a27aa4fe53fd026af91258b396b7d05e9fe1318077ace3ca96526268"
+    },
+    "bird_dog_left": {
+      "file": "bird_dog_left.25505ab55e09.mp3",
+      "text": "Left arm forward, right leg back. Stay steady and breathe.",
+      "sha256": "25505ab55e09edbadcfc2a46192ee19cc5e49fac5e64e587fc91635ca28785d6"
+    },
+    "bird_dog_right": {
+      "file": "bird_dog_right.13ec273311f0.mp3",
+      "text": "Right arm forward, left leg back. Stay steady and breathe.",
+      "sha256": "13ec273311f02b4af1d574f513f10cf1380efe1e3989e48f8cd2e8754f5bcaa3"
+    },
+    "static_plank_prepare": {
+      "file": "static_plank_prepare.ddaa4ed37b12.mp3",
+      "text": "Static plank. Find a stable position and get ready.",
+      "sha256": "ddaa4ed37b12d7cc9aa1dd9406f6612b65722629d0023ea9362e493ebceb165e"
+    },
+    "static_plank_start": {
+      "file": "static_plank_start.9c1f616397be.mp3",
+      "text": "Begin the plank. Brace gently, keep your body in one long line, and keep breathing.",
+      "sha256": "9c1f616397bef4d4d6ba4b51f1c7e3e49c6c56417d37a690f60340911d4f65de"
+    },
+    "static_plank_set_2": {
+      "file": "static_plank_set_2.f64d292a3f88.mp3",
+      "text": "Set two. Begin, and keep breathing.",
+      "sha256": "f64d292a3f88e2e02e6259003d60facf46a53840180cdd7f06f9cdd2546b23c7"
+    },
+    "static_plank_set_3": {
+      "file": "static_plank_set_3.bdee360af443.mp3",
+      "text": "Set three. Begin, and keep breathing.",
+      "sha256": "bdee360af44309b2782c847d241a61f5d3701b438d24e69ebf53017c2db268c2"
+    },
+    "static_plank_rest_2": {
+      "file": "static_plank_rest_2.44a2c86c7e07.mp3",
+      "text": "Rest. Breathe normally. Set two is next.",
+      "sha256": "44a2c86c7e07f121b5bfcf161d16f2cbd617164886f672e496411498cf771a43"
+    },
+    "static_plank_rest_3": {
+      "file": "static_plank_rest_3.5c39f52c87c5.mp3",
+      "text": "Rest. Breathe normally. Set three is next.",
+      "sha256": "5c39f52c87c57dbded8e6ed51c88e17e0b04aec4723fac32d6017bace26e44bc"
+    },
+    "side_plank_prepare": {
+      "file": "side_plank_prepare.d6b75b442c33.mp3",
+      "text": "Side plank. Find a stable position and get ready.",
+      "sha256": "d6b75b442c3323e3659cd81e7290f43c130e64ddad4ac3618c2a6aed6705c68d"
+    },
+    "side_plank_left": {
+      "file": "side_plank_left.a589315cdaf0.mp3",
+      "text": "Begin on your left side. Lift your hips, keep your body long, and breathe.",
+      "sha256": "a589315cdaf0fb11e68ee91053967eb79fa263ffbbbbb9106047ba58cc4d6db7"
+    },
+    "side_plank_right": {
+      "file": "side_plank_right.cd1637783ea4.mp3",
+      "text": "Begin on your right side. Lift your hips, keep your body long, and breathe.",
+      "sha256": "cd1637783ea400401b30c6344b39ac402ebf7e41f6e07fe6e77eb2e47d13f8d9"
+    },
+    "side_plank_rest_right": {
+      "file": "side_plank_rest_right.d670fe463024.mp3",
+      "text": "Rest and breathe. Your right side is next.",
+      "sha256": "d670fe46302459519ae36277737a737a86716f029d12f9eee7d4a77f1424b80f"
+    },
+    "side_plank_rest_left": {
+      "file": "side_plank_rest_left.4547825e386b.mp3",
+      "text": "Rest and breathe. Your left side is next.",
+      "sha256": "4547825e386b585455da5d360bb826f3e8427d0e16e889ebcd431e8402e26b36"
+    },
+    "cat_cow_prepare": {
+      "file": "cat_cow_prepare.637ba089200a.mp3",
+      "text": "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
+      "sha256": "637ba089200ae869d1b01ea277af40907f553b252237b0a274f45e6edcfc5505"
+    },
+    "cat_cow_start": {
+      "file": "cat_cow_start.5d553f488941.mp3",
+      "text": "Begin cat cow. Slowly round your back, then gently release.",
+      "sha256": "5d553f4889410a733e0577174deb63eb4eab25cbd44d7580d10fee0dc045eb65"
+    },
+    "cat_cow_rep_2": {
+      "file": "cat_cow_rep_2.6a6edc2c854f.mp3",
+      "text": "Rep two. Slowly round, then release.",
+      "sha256": "6a6edc2c854fadcf7fdea586e6f89c131e64ffb99b04efc5eb888c26e679123a"
+    },
+    "cat_cow_rep_3": {
+      "file": "cat_cow_rep_3.859d2ef56881.mp3",
+      "text": "Rep three. Slowly round, then release.",
+      "sha256": "859d2ef568817711952e76892169aecfdf002f7214d623819f4c66fcf38d3cb8"
+    },
+    "cat_cow_rep_4": {
+      "file": "cat_cow_rep_4.b54cda7de02e.mp3",
+      "text": "Rep four. Slowly round, then release.",
+      "sha256": "b54cda7de02ebb24cd27499136c47db174333d9cc3017c1feb0be7f98db54515"
+    },
+    "cat_cow_rep_5": {
+      "file": "cat_cow_rep_5.cad5ed75865c.mp3",
+      "text": "Rep five. Slowly round, then release.",
+      "sha256": "cad5ed75865c9adcbf948d74f306e960b01ae78102860b2d6daced2b9b3d860d"
+    },
+    "cat_cow_rep_6": {
+      "file": "cat_cow_rep_6.e0e7195efcdc.mp3",
+      "text": "Rep six. Slowly round, then release.",
+      "sha256": "e0e7195efcdcf008aae5e6b8cbc5c050e6d1ac22f63854908fb6773c66be4442"
+    },
+    "cat_cow_rep_7": {
+      "file": "cat_cow_rep_7.bcc1db3c79f8.mp3",
+      "text": "Rep seven. Slowly round, then release.",
+      "sha256": "bcc1db3c79f828311ef035153f7917a3f396c62aa154c098c77fa2677a3d044c"
+    },
+    "cat_cow_rep_8": {
+      "file": "cat_cow_rep_8.cfd29f1ad715.mp3",
+      "text": "Rep eight. Slowly round, then release.",
+      "sha256": "cfd29f1ad715a01633dc8fd8ce071b856357b847cbfe5384870141c9bf39d8c9"
+    },
+    "cat_cow_rep_9": {
+      "file": "cat_cow_rep_9.3167927dedde.mp3",
+      "text": "Rep nine. Slowly round, then release.",
+      "sha256": "3167927deddea5f01e3ce9bc9fd108272f4ab70e97ca04c46c2b164a46897a59"
+    },
+    "cat_cow_rep_10": {
+      "file": "cat_cow_rep_10.a089375cd77b.mp3",
+      "text": "Rep ten. Slowly round, then release.",
+      "sha256": "a089375cd77bbd79fdb343ddeef085a88aa171f3d56a8ba6eb82279bf9438d56"
+    }
+  }
+}
