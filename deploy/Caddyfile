@@ -96,6 +96,18 @@ http://vultr.tailde302.ts.net {
     @legacy_celpip path /static/celpip /static/celpip/*
     redir @legacy_celpip /celpip/webapp/index.html?view=overview 308
 
+    @exercises_root path /exercises
+    redir @exercises_root /exercises/ 308
+
+    @legacy_exercises path /tools/exercises /tools/exercises/ /tools/exercises.html
+    redir @legacy_exercises /exercises/ 308
+
+    handle_path /exercises/* {
+        root * /srv/www/exercises
+        try_files {path} {path}/index.html /index.html
+        file_server
+    }
+
     handle /api/* {
         reverse_proxy backend:8000
     }
@@ -110,10 +122,6 @@ http://vultr.tailde302.ts.net {
         redir @json_viewer /tools/json-viewer.html 302
         @json_viewer_slash path "/tools/json-viewer/"
         redir @json_viewer_slash /tools/json-viewer.html 302
-        @exercises_root path "/exercises"
-        redir @exercises_root /exercises/ 308
-        @legacy_exercises path "/tools/exercises" "/tools/exercises/" "/tools/exercises.html"
-        redir @legacy_exercises /exercises/ 308
         try_files {path} /index.html
         file_server
     }
