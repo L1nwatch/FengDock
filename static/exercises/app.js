@@ -1,5 +1,7 @@
 const STORAGE_KEY = "fengdock.exercises.v1";
 const STORAGE_VERSION = 2;
+const AUDIO_BASE_URL = "/static/exercises/audio";
+const AUDIO_MANIFEST_URL = `${AUDIO_BASE_URL}/manifest.json`;
 
 const EXERCISES = [
   {
@@ -16,7 +18,10 @@ const EXERCISES = [
     ],
     maxAutoLevel: 4,
     buildSteps(dose) {
-      const steps = [prepareStep(this.name)];
+      const steps = [prepareStep(
+        "bird_dog_prepare",
+        "Bird dog. Come onto your hands and knees, find a steady position, and get ready.",
+      )];
       const totalHolds = dose.repsPerSide * 2;
       let holdIndex = 0;
       for (let round = 1; round <= dose.repsPerSide; round += 1) {
@@ -25,24 +30,32 @@ const EXERCISES = [
           phase: "work",
           duration: dose.holdSeconds,
           instruction: "左臂向前，右腿向后",
-          prompt: round === 1 ? "开始。左臂向前，右腿向后" : "左臂向前，右腿向后",
+          audioCue: round === 1 ? "bird_dog_left_first" : "bird_dog_left",
+          prompt: round === 1
+            ? "Begin. Reach your left arm forward and your right leg back. Keep your pelvis steady and breathe."
+            : "Left arm forward, right leg back. Stay steady and breathe.",
           roundLabel: `第 ${round} 轮 / 共 ${dose.repsPerSide} 轮`,
           next: "接下来：换边",
           countDown: true,
         });
-        if (holdIndex < totalHolds) steps.push(switchStep("换边。右臂向前，左腿向后"));
+        if (holdIndex < totalHolds) {
+          steps.push(switchStep("switch_sides", "Switch sides and get into position."));
+        }
 
         holdIndex += 1;
         steps.push({
           phase: "work",
           duration: dose.holdSeconds,
           instruction: "右臂向前，左腿向后",
-          prompt: "右臂向前，左腿向后",
+          audioCue: "bird_dog_right",
+          prompt: "Right arm forward, left leg back. Stay steady and breathe.",
           roundLabel: `第 ${round} 轮 / 共 ${dose.repsPerSide} 轮`,
           next: round === dose.repsPerSide ? "接下来：动作完成" : "接下来：换边",
           countDown: true,
         });
-        if (holdIndex < totalHolds) steps.push(switchStep("换边。左臂向前，右腿向后"));
+        if (holdIndex < totalHolds) {
+          steps.push(switchStep("switch_sides", "Switch sides and get into position."));
+        }
       }
       return steps;
     },
@@ -64,19 +77,27 @@ const EXERCISES = [
     ],
     maxAutoLevel: 4,
     buildSteps(dose) {
-      const steps = [prepareStep(this.name)];
+      const steps = [prepareStep("static_plank_prepare", "Static plank. Find a stable position and get ready.")];
       for (let set = 1; set <= dose.sets; set += 1) {
         steps.push({
           phase: "work",
           duration: dose.holdSeconds,
           instruction: "收紧躯干，保持身体一线",
-          prompt: set === 1 ? "开始平板支撑" : `第 ${set} 组，开始`,
+          audioCue: set === 1 ? "static_plank_start" : `static_plank_set_${set}`,
+          prompt: set === 1
+            ? "Begin the plank. Brace gently, keep your body in one long line, and keep breathing."
+            : `Set ${set}. Begin, and keep breathing.`,
           roundLabel: `第 ${set} 组 / 共 ${dose.sets} 组`,
           next: set === dose.sets ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`,
           countDown: true,
         });
         if (set < dose.sets) {
-          steps.push(restStep(dose.restSeconds, `休息。下一组是第 ${set + 1} 组`, `第 ${set} 组完成 / 共 ${dose.sets} 组`));
+          steps.push(restStep(
+            dose.restSeconds,
+            `static_plank_rest_${set + 1}`,
+            `Rest. Breathe normally. Set ${set + 1} is next.`,
+            `第 ${set} 组完成 / 共 ${dose.sets} 组`,
+          ));
         }
       }
       return steps;
@@ -99,7 +120,7 @@ const EXERCISES = [
     ],
     maxAutoLevel: 4,
     buildSteps(dose) {
-      const steps = [prepareStep(this.name)];
+      const steps = [prepareStep("side_plank_prepare", "Side plank. Find a stable position and get ready.")];
       const total = dose.setsPerSide * 2;
       let current = 0;
       for (let set = 1; set <= dose.setsPerSide; set += 1) {
@@ -108,25 +129,37 @@ const EXERCISES = [
           phase: "work",
           duration: dose.holdSeconds,
           instruction: "左侧支撑，抬起骨盆",
-          prompt: set === 1 ? "开始。左侧支撑" : "左侧支撑",
+          audioCue: "side_plank_left",
+          prompt: "Begin on your left side. Lift your hips, keep your body long, and breathe.",
           roundLabel: `第 ${set} 轮左侧 / 共 ${dose.setsPerSide} 轮`,
           next: `接下来：休息 ${dose.restSeconds} 秒后换边`,
           countDown: true,
         });
-        steps.push(restStep(dose.restSeconds, "休息。下一步，右侧支撑", `已完成 ${current} / ${total} 组`));
+        steps.push(restStep(
+          dose.restSeconds,
+          "side_plank_rest_right",
+          "Rest and breathe. Your right side is next.",
+          `已完成 ${current} / ${total} 组`,
+        ));
 
         current += 1;
         steps.push({
           phase: "work",
           duration: dose.holdSeconds,
           instruction: "右侧支撑，抬起骨盆",
-          prompt: "右侧支撑",
+          audioCue: "side_plank_right",
+          prompt: "Begin on your right side. Lift your hips, keep your body long, and breathe.",
           roundLabel: `第 ${set} 轮右侧 / 共 ${dose.setsPerSide} 轮`,
           next: current === total ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`,
           countDown: true,
         });
         if (current < total) {
-          steps.push(restStep(dose.restSeconds, "休息。下一轮从左侧开始", `已完成 ${current} / ${total} 组`));
+          steps.push(restStep(
+            dose.restSeconds,
+            "side_plank_rest_left",
+            "Rest and breathe. Your left side is next.",
+            `已完成 ${current} / ${total} 组`,
+          ));
         }
       }
       return steps;
@@ -144,13 +177,19 @@ const EXERCISES = [
     fixedDose: { level: 1, reps: 10, secondsPerRep: 6 },
     automaticProgression: false,
     buildSteps(dose) {
-      const steps = [prepareStep(this.name)];
+      const steps = [prepareStep(
+        "cat_cow_prepare",
+        "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
+      )];
       for (let rep = 1; rep <= dose.reps; rep += 1) {
         steps.push({
           phase: "work",
           duration: dose.secondsPerRep,
           instruction: "缓慢拱背，再向反方向活动",
-          prompt: rep === 1 ? "开始猫牛式。缓慢拱背，再向反方向活动" : `第 ${rep} 次`,
+          audioCue: rep === 1 ? "cat_cow_start" : `cat_cow_rep_${rep}`,
+          prompt: rep === 1
+            ? "Begin cat cow. Slowly round your back, then gently release."
+            : `Rep ${rep}. Slowly round, then release.`,
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次`,
           next: rep === dose.reps ? "接下来：训练完成" : `接下来：第 ${rep + 1} 次`,
           countDown: false,
@@ -218,24 +257,31 @@ let workout = null;
 let timerId = null;
 let wakeLock = null;
 let toastTimer = null;
+let audioManifest = null;
+let activeAudio = null;
+const audioCache = new Map();
 
-function prepareStep(name) {
+const audioManifestPromise = loadAudioManifest();
+
+function prepareStep(audioCue, prompt) {
   return {
     phase: "prepare",
-    duration: 5,
+    duration: 7,
     instruction: "找到稳定位置，准备开始",
-    prompt: `${name}。准备开始`,
+    audioCue,
+    prompt,
     roundLabel: "准备姿势",
     next: "接下来：开始动作",
-    countDown: true,
+    countDown: false,
   };
 }
 
-function switchStep(prompt) {
+function switchStep(audioCue, prompt) {
   return {
     phase: "switch",
-    duration: 2,
+    duration: 4,
     instruction: "换边",
+    audioCue,
     prompt,
     roundLabel: "调整姿势",
     next: "接下来：保持",
@@ -243,11 +289,12 @@ function switchStep(prompt) {
   };
 }
 
-function restStep(duration, prompt, roundLabel) {
+function restStep(duration, audioCue, prompt, roundLabel) {
   return {
     phase: "rest",
     duration,
     instruction: "休息并正常呼吸",
+    audioCue,
     prompt,
     roundLabel,
     next: "接下来：下一组",
@@ -423,7 +470,8 @@ function enterCurrentStep() {
   workout.deadline = Date.now() + workout.remainingMs;
   workout.countDownSpoken = false;
   renderWorkout();
-  speak(step.prompt);
+  speak(step.audioCue, step.prompt);
+  preloadNextCue();
   vibrate(step.phase === "work" ? [60] : [35, 40, 35]);
   timerId = window.setInterval(tickTimer, 100);
 }
@@ -437,7 +485,7 @@ function tickTimer() {
 
   if (step.countDown && !workout.countDownSpoken && workout.remainingMs <= 3200 && workout.remainingMs > 0) {
     workout.countDownSpoken = true;
-    speak("三，二，一", { interrupt: false });
+    speak("countdown", "Three, two, one.", { interrupt: false });
   }
 
   if (workout.remainingMs <= 0) {
@@ -468,7 +516,7 @@ function completeCurrentExercise() {
   const result = workout.results[workout.exerciseIndex];
   result.completed = result.completedWorkSteps === result.totalWorkSteps && result.skippedWorkSteps === 0;
   clearTimer();
-  speak("动作完成。请选择没问题，或不舒服", { interrupt: true });
+  speak("exercise_complete", "Exercise complete. How did that feel?", { interrupt: true });
   vibrate([80, 70, 120]);
   renderExerciseFeedback();
   showView("feedback");
@@ -486,8 +534,8 @@ function skipExercise() {
   workout.records.push(record);
   workout.adjustments.push(applyProgression(record));
   persistWorkoutSession("in_progress");
-  speak("已跳过。准备下一个动作");
-  advanceToNextExercise();
+  speak("exercise_skipped", "Exercise skipped. Get ready for the next movement.");
+  window.setTimeout(advanceToNextExercise, 1200);
 }
 
 function togglePause() {
@@ -497,7 +545,7 @@ function togglePause() {
     workout.deadline = Date.now() + workout.remainingMs;
     elements.pauseLabel.textContent = "暂停";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "Ⅱ";
-    speak("继续");
+    speak("resumed", "Let's continue.");
     timerId = window.setInterval(tickTimer, 100);
   } else {
     workout.remainingMs = Math.max(0, workout.deadline - Date.now());
@@ -505,8 +553,8 @@ function togglePause() {
     clearTimer();
     elements.pauseLabel.textContent = "继续";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "▶";
-    window.speechSynthesis?.cancel();
-    speak("已暂停", { interrupt: false });
+    stopVoice();
+    speak("paused", "Paused. Take your time.", { interrupt: false });
   }
   renderWorkout();
 }
@@ -567,8 +615,11 @@ function saveFeedback(event) {
   workout.records.push(record);
   workout.adjustments.push(applyProgression(record));
   persistWorkoutSession("in_progress");
-  speak(feedback === "good" ? "已记录，没问题" : "已记录，不舒服");
-  advanceToNextExercise();
+  speak(
+    feedback === "good" ? "feedback_good" : "feedback_bad",
+    feedback === "good" ? "Got it. That felt good." : "Got it. We'll keep that in mind.",
+  );
+  window.setTimeout(advanceToNextExercise, 1200);
 }
 
 function createRecord(result, feedback) {
@@ -613,8 +664,8 @@ function finishWorkout() {
   clearTimer();
   releaseWakeLock();
   persistWorkoutSession("completed");
-  window.speechSynthesis?.cancel();
-  speak("今天的训练完成", { interrupt: false });
+  stopVoice();
+  speak("workout_complete", "Today's session is complete. Nice work.", { interrupt: false });
   renderSummary(workout.adjustments);
   workout = null;
   showView("summary");
@@ -758,8 +809,8 @@ function showView(name) {
 function toggleVoice() {
   store.voiceEnabled = !store.voiceEnabled;
   saveStore();
-  if (!store.voiceEnabled) window.speechSynthesis?.cancel();
-  else speak("语音播报已开启");
+  if (!store.voiceEnabled) stopVoice();
+  else speak("voice_enabled", "Audio guidance is on.");
   updateVoiceButton();
 }
 
@@ -769,22 +820,86 @@ function updateVoiceButton() {
   elements.voiceToggle.querySelector(".icon-button__label").textContent = store.voiceEnabled ? "语音开" : "语音关";
 }
 
-function speak(text, { interrupt = true } = {}) {
-  if (
-    !store.voiceEnabled ||
-    !text ||
-    !("speechSynthesis" in window) ||
-    !("SpeechSynthesisUtterance" in window)
-  ) return;
+function speak(cueId, fallbackText, { interrupt = true } = {}) {
+  if (!store.voiceEnabled || !fallbackText) return;
+  if (interrupt) stopVoice();
+
+  const audio = getCueAudio(cueId);
+  if (!audio) {
+    speakFallback(fallbackText, { interrupt: false });
+    return;
+  }
+
+  activeAudio = audio;
+  audio.currentTime = 0;
+  audio.play().catch(() => {
+    if (activeAudio === audio) activeAudio = null;
+    speakFallback(fallbackText, { interrupt: false });
+  });
+}
+
+function speakFallback(text, { interrupt = true } = {}) {
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
   if (interrupt) window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "zh-CN";
-  utterance.rate = 0.94;
+  utterance.lang = "en-US";
+  utterance.rate = 0.92;
   utterance.pitch = 1;
   const voices = window.speechSynthesis.getVoices();
-  const chineseVoice = voices.find((voice) => /^zh[-_]/i.test(voice.lang));
-  if (chineseVoice) utterance.voice = chineseVoice;
+  const englishVoice = voices.find((voice) => /^en[-_]US/i.test(voice.lang))
+    || voices.find((voice) => /^en[-_]/i.test(voice.lang));
+  if (englishVoice) utterance.voice = englishVoice;
   window.speechSynthesis.speak(utterance);
+}
+
+async function loadAudioManifest() {
+  try {
+    const response = await fetch(AUDIO_MANIFEST_URL, { cache: "no-store" });
+    if (!response.ok) return null;
+    audioManifest = await response.json();
+    const firstCue = buildPlan()[0]?.steps[0]?.audioCue;
+    if (firstCue) preloadCue(firstCue);
+    return audioManifest;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function getCueAudio(cueId) {
+  const cue = audioManifest?.cues?.[cueId];
+  if (!cue?.file) return null;
+  if (!audioCache.has(cueId)) {
+    const audio = new Audio(`${AUDIO_BASE_URL}/${cue.file}`);
+    audio.preload = "auto";
+    audio.addEventListener("ended", () => {
+      if (activeAudio === audio) activeAudio = null;
+    });
+    audioCache.set(cueId, audio);
+  }
+  return audioCache.get(cueId);
+}
+
+function preloadCue(cueId) {
+  const audio = getCueAudio(cueId);
+  if (audio) audio.load();
+}
+
+function preloadNextCue() {
+  if (!workout) return;
+  const currentItem = workout.plan[workout.exerciseIndex];
+  const nextStep = currentItem.steps[workout.stepIndex + 1];
+  const nextExercise = workout.plan[workout.exerciseIndex + 1];
+  const cueId = nextStep?.audioCue || nextExercise?.steps[0]?.audioCue;
+  if (cueId) preloadCue(cueId);
+}
+
+function stopVoice() {
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.currentTime = 0;
+    activeAudio = null;
+  }
+  window.speechSynthesis?.cancel();
 }
 
 function vibrate(pattern) {
@@ -841,7 +956,7 @@ elements.confirmCancel.addEventListener("click", () => {
 elements.confirmExit.addEventListener("click", () => {
   clearTimer();
   releaseWakeLock();
-  window.speechSynthesis?.cancel();
+  stopVoice();
   workout = null;
   elements.confirmDialog.close();
   showView("home");
@@ -878,3 +993,4 @@ window.addEventListener("beforeunload", () => {
 
 showView("home");
 renderHome();
+audioManifestPromise.catch(() => {});
