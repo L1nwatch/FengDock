@@ -3,7 +3,7 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-03T23:16:17Z",
+  "generated_at": "2026-08-03T23:24:10Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
@@ -145,55 +145,60 @@
       "text": "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
       "sha256": "637ba089200ae869d1b01ea277af40907f553b252237b0a274f45e6edcfc5505"
     },
-    "cat_cow_start": {
-      "file": "cat_cow_start.5d553f488941.mp3",
-      "text": "Begin cat cow. Slowly round your back, then gently release.",
-      "sha256": "5d553f4889410a733e0577174deb63eb4eab25cbd44d7580d10fee0dc045eb65"
+    "cat_cow_round_1": {
+      "file": "cat_cow_round_1.105af82e25b5.mp3",
+      "text": "Rep one. Slowly round your back.",
+      "sha256": "105af82e25b5daf1a9f8789e459e8e82d238e980251a72155d37a862e63e78bc"
     },
-    "cat_cow_rep_2": {
-      "file": "cat_cow_rep_2.6a6edc2c854f.mp3",
-      "text": "Rep two. Slowly round, then release.",
-      "sha256": "6a6edc2c854fadcf7fdea586e6f89c131e64ffb99b04efc5eb888c26e679123a"
+    "cat_cow_round_2": {
+      "file": "cat_cow_round_2.7a017e7b5ada.mp3",
+      "text": "Rep two. Slowly round your back.",
+      "sha256": "7a017e7b5ada760123032cfb42d1048108b5f5b0083434555981dbde6b165926"
     },
-    "cat_cow_rep_3": {
-      "file": "cat_cow_rep_3.859d2ef56881.mp3",
-      "text": "Rep three. Slowly round, then release.",
-      "sha256": "859d2ef568817711952e76892169aecfdf002f7214d623819f4c66fcf38d3cb8"
+    "cat_cow_round_3": {
+      "file": "cat_cow_round_3.263fda539201.mp3",
+      "text": "Rep three. Slowly round your back.",
+      "sha256": "263fda5392013066301744fb1b25765872075ba370afcb4bcc73d13d37181d17"
     },
-    "cat_cow_rep_4": {
-      "file": "cat_cow_rep_4.b54cda7de02e.mp3",
-      "text": "Rep four. Slowly round, then release.",
-      "sha256": "b54cda7de02ebb24cd27499136c47db174333d9cc3017c1feb0be7f98db54515"
+    "cat_cow_round_4": {
+      "file": "cat_cow_round_4.ec52c8e24a2d.mp3",
+      "text": "Rep four. Slowly round your back.",
+      "sha256": "ec52c8e24a2d0770c4a448d7022e923b66adbb7ed3196b0c9cc02854d42a1bdc"
     },
-    "cat_cow_rep_5": {
-      "file": "cat_cow_rep_5.cad5ed75865c.mp3",
-      "text": "Rep five. Slowly round, then release.",
-      "sha256": "cad5ed75865c9adcbf948d74f306e960b01ae78102860b2d6daced2b9b3d860d"
+    "cat_cow_round_5": {
+      "file": "cat_cow_round_5.1228308e5f22.mp3",
+      "text": "Rep five. Slowly round your back.",
+      "sha256": "1228308e5f22dab28f8e05f5580a956fc2ce8d8fb0171961c45d1579b55637f9"
     },
-    "cat_cow_rep_6": {
-      "file": "cat_cow_rep_6.e0e7195efcdc.mp3",
-      "text": "Rep six. Slowly round, then release.",
-      "sha256": "e0e7195efcdcf008aae5e6b8cbc5c050e6d1ac22f63854908fb6773c66be4442"
+    "cat_cow_round_6": {
+      "file": "cat_cow_round_6.8759ceb98316.mp3",
+      "text": "Rep six. Slowly round your back.",
+      "sha256": "8759ceb98316ce84c9bfac37b0e25d5b9b57c3e33ceee957f6c28541c781ccad"
     },
-    "cat_cow_rep_7": {
-      "file": "cat_cow_rep_7.bcc1db3c79f8.mp3",
-      "text": "Rep seven. Slowly round, then release.",
-      "sha256": "bcc1db3c79f828311ef035153f7917a3f396c62aa154c098c77fa2677a3d044c"
+    "cat_cow_round_7": {
+      "file": "cat_cow_round_7.6adea0eea696.mp3",
+      "text": "Rep seven. Slowly round your back.",
+      "sha256": "6adea0eea6968e99abf588cf233e753545387b471cae9e0b6c1d93d89de9272d"
     },
-    "cat_cow_rep_8": {
-      "file": "cat_cow_rep_8.cfd29f1ad715.mp3",
-      "text": "Rep eight. Slowly round, then release.",
-      "sha256": "cfd29f1ad715a01633dc8fd8ce071b856357b847cbfe5384870141c9bf39d8c9"
+    "cat_cow_round_8": {
+      "file": "cat_cow_round_8.c563de129b18.mp3",
+      "text": "Rep eight. Slowly round your back.",
+      "sha256": "c563de129b1804757b2e4995096f420970fc4d48f1d5577118841ac6842fe277"
     },
-    "cat_cow_rep_9": {
-      "file": "cat_cow_rep_9.3167927dedde.mp3",
-      "text": "Rep nine. Slowly round, then release.",
-      "sha256": "3167927deddea5f01e3ce9bc9fd108272f4ab70e97ca04c46c2b164a46897a59"
+    "cat_cow_round_9": {
+      "file": "cat_cow_round_9.798f4aa473c2.mp3",
+      "text": "Rep nine. Slowly round your back.",
+      "sha256": "798f4aa473c2d0019a6f4d9cb9f7d9e29635ff7be226ea7ce01dd48276798883"
     },
-    "cat_cow_rep_10": {
-      "file": "cat_cow_rep_10.a089375cd77b.mp3",
-      "text": "Rep ten. Slowly round, then release.",
-      "sha256": "a089375cd77bbd79fdb343ddeef085a88aa171f3d56a8ba6eb82279bf9438d56"
+    "cat_cow_round_10": {
+      "file": "cat_cow_round_10.535956cc6cd2.mp3",
+      "text": "Rep ten. Slowly round your back.",
+      "sha256": "535956cc6cd26c099d57aaf633f462ed5da8f34aa3df117162d3f09160e39d51"
+    },
+    "cat_cow_release": {
+      "file": "cat_cow_release.a02896a6d946.mp3",
+      "text": "Now, gently release.",
+      "sha256": "a02896a6d9465911bc875a083af817ef6504c354c5e2add905e2cbd3cd866d48"
     },
     "high_incline_prepare": {
       "file": "high_incline_prepare.71fa1eb82a33.mp3",
