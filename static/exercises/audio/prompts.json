@@ -40,6 +40,23 @@
     "cat_cow_rep_7": "Rep seven. Slowly round, then release.",
     "cat_cow_rep_8": "Rep eight. Slowly round, then release.",
     "cat_cow_rep_9": "Rep nine. Slowly round, then release.",
-    "cat_cow_rep_10": "Rep ten. Slowly round, then release."
+    "cat_cow_rep_10": "Rep ten. Slowly round, then release.",
+    "high_incline_prepare": "High incline push-up. Use a stable kitchen counter about ten centimeters below navel height. Place your hands about shoulder-width apart, and start with your feet about eighty centimeters from the counter. Keep your body in one straight line, lightly brace your core, and squeeze your glutes.",
+    "high_incline_set_1_start": "Set one. Begin. Lower your chest toward the counter, then press back up.",
+    "high_incline_set_2_start": "Set two. Begin. Lower your chest toward the counter, then press back up.",
+    "high_incline_set_3_start": "Set three. Begin. Lower your chest toward the counter, then press back up.",
+    "high_incline_rest_2": "Set one complete. Rest for ninety seconds. Set two is next.",
+    "high_incline_rest_3": "Set two complete. Rest for ninety seconds. Set three is next.",
+    "high_incline_rep_2": "Rep two. Lower slowly, then press up.",
+    "high_incline_rep_3": "Rep three. Lower slowly, then press up.",
+    "high_incline_rep_4": "Rep four. Lower slowly, then press up.",
+    "high_incline_rep_5": "Rep five. Lower slowly, then press up.",
+    "high_incline_rep_6": "Rep six. Lower slowly, then press up.",
+    "high_incline_rep_7": "Rep seven. Lower slowly, then press up.",
+    "high_incline_rep_8": "Rep eight. Lower slowly, then press up.",
+    "high_incline_rep_9": "Rep nine. Lower slowly, then press up.",
+    "high_incline_rep_10": "Rep ten. Lower slowly, then press up.",
+    "high_incline_rep_11": "Rep eleven. Lower slowly, then press up.",
+    "high_incline_rep_12": "Rep twelve. Lower slowly, then press up."
   }
 }

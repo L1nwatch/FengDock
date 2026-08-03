@@ -692,6 +692,12 @@ h2 {
   background: rgba(170, 56, 47, 0.09);
 }
 
+.adjustment-result--review,
+.level-chip[data-review="true"] {
+  color: #74401e;
+  background: #f5c58e;
+}
+
 dialog {
   color: var(--ink);
 }

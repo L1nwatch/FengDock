@@ -5,6 +5,96 @@ const AUDIO_MANIFEST_URL = `${AUDIO_BASE_URL}/manifest.json`;
 
 const EXERCISES = [
   {
+    id: "cat_cow",
+    name: "Cat-Cow",
+    chineseName: "猫牛式",
+    purpose: "温和活动脊柱 · 不做力量进阶",
+    cue: "只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
+    fixedDose: { level: 1, reps: 10, secondsPerRep: 6 },
+    automaticProgression: false,
+    buildSteps(dose) {
+      const steps = [prepareStep(
+        "cat_cow_prepare",
+        "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
+      )];
+      for (let rep = 1; rep <= dose.reps; rep += 1) {
+        steps.push({
+          phase: "work",
+          duration: dose.secondsPerRep,
+          instruction: "缓慢拱背，再向反方向活动",
+          audioCue: rep === 1 ? "cat_cow_start" : `cat_cow_rep_${rep}`,
+          prompt: rep === 1
+            ? "Begin cat cow. Slowly round your back, then gently release."
+            : `Rep ${rep}. Slowly round, then release.`,
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次`,
+          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次`,
+          countDown: false,
+        });
+      }
+      return steps;
+    },
+    doseLabel(dose) {
+      return `${dose.reps} 次 · 每次约 ${dose.secondsPerRep} 秒`;
+    },
+  },
+  {
+    id: "high_incline_push_up",
+    name: "High Incline Push-Up",
+    chineseName: "高位斜板俯卧撑",
+    purpose: "胸肌与肱三头肌力量 · 上肢线条",
+    cue: "使用稳定厨房台面；双手约肩宽，脚距台面约 80 厘米；头、肩、髋、脚跟近似一线，腹部轻收并夹紧臀部；肘部与躯干约 30–45°。腰、肩或手腕不适请选“不舒服”。",
+    levels: [
+      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 90, secondsPerRep: 5 },
+      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 90, secondsPerRep: 5 },
+      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 90, secondsPerRep: 5 },
+      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 90, secondsPerRep: 5 },
+      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 90, secondsPerRep: 5 },
+      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 90, secondsPerRep: 5 },
+    ],
+    maxAutoLevel: 6,
+    manualReviewAtMax: true,
+    buildSteps(dose) {
+      const steps = [prepareStep(
+        "high_incline_prepare",
+        "High incline push-up. Use a stable kitchen counter about ten centimeters below navel height. Place your hands about shoulder-width apart, and start with your feet about eighty centimeters from the counter. Keep your body in one straight line, lightly brace your core, and squeeze your glutes.",
+        18,
+      )];
+      for (let set = 1; set <= dose.sets; set += 1) {
+        for (let rep = 1; rep <= dose.repsPerSet; rep += 1) {
+          const firstRep = rep === 1;
+          const lastRep = rep === dose.repsPerSet;
+          const lastSet = set === dose.sets;
+          steps.push({
+            phase: "work",
+            duration: dose.secondsPerRep,
+            instruction: "胸部靠近台面，再受控推回",
+            audioCue: firstRep ? `high_incline_set_${set}_start` : `high_incline_rep_${rep}`,
+            prompt: firstRep
+              ? `Set ${set}. Begin. Lower your chest toward the counter, then press back up.`
+              : `Rep ${rep}. Lower slowly, then press up.`,
+            roundLabel: `第 ${set} 组 · 第 ${rep} 次 / 共 ${dose.repsPerSet} 次`,
+            next: lastRep
+              ? (lastSet ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`)
+              : `接下来：第 ${rep + 1} 次`,
+            countDown: false,
+          });
+        }
+        if (set < dose.sets) {
+          steps.push(restStep(
+            dose.restSeconds,
+            `high_incline_rest_${set + 1}`,
+            `Set ${set} complete. Rest for ninety seconds. Set ${set + 1} is next.`,
+            `第 ${set} 组完成 / 共 ${dose.sets} 组`,
+          ));
+        }
+      }
+      return steps;
+    },
+    doseLabel(dose) {
+      return `${dose.sets} 组 · 每组 ${dose.repsPerSet} 次 · 休息 ${dose.restSeconds} 秒`;
+    },
+  },
+  {
     id: "bird_dog",
     name: "Bird-Dog",
     chineseName: "鸟狗式",
@@ -168,39 +258,6 @@ const EXERCISES = [
       return `每侧 ${dose.setsPerSide} 组 · 每组 ${dose.holdSeconds} 秒 · 休息 ${dose.restSeconds} 秒`;
     },
   },
-  {
-    id: "cat_cow",
-    name: "Cat-Cow",
-    chineseName: "猫牛式",
-    purpose: "温和活动脊柱 · 不做力量进阶",
-    cue: "只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
-    fixedDose: { level: 1, reps: 10, secondsPerRep: 6 },
-    automaticProgression: false,
-    buildSteps(dose) {
-      const steps = [prepareStep(
-        "cat_cow_prepare",
-        "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
-      )];
-      for (let rep = 1; rep <= dose.reps; rep += 1) {
-        steps.push({
-          phase: "work",
-          duration: dose.secondsPerRep,
-          instruction: "缓慢拱背，再向反方向活动",
-          audioCue: rep === 1 ? "cat_cow_start" : `cat_cow_rep_${rep}`,
-          prompt: rep === 1
-            ? "Begin cat cow. Slowly round your back, then gently release."
-            : `Rep ${rep}. Slowly round, then release.`,
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次`,
-          next: rep === dose.reps ? "接下来：训练完成" : `接下来：第 ${rep + 1} 次`,
-          countDown: false,
-        });
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `${dose.reps} 次 · 每次约 ${dose.secondsPerRep} 秒`;
-    },
-  },
 ];
 
 const FEEDBACK_LABELS = { good: "没问题", bad: "不舒服" };
@@ -263,10 +320,10 @@ const audioCache = new Map();
 
 const audioManifestPromise = loadAudioManifest();
 
-function prepareStep(audioCue, prompt) {
+function prepareStep(audioCue, prompt, duration = 7) {
   return {
     phase: "prepare",
-    duration: 7,
+    duration,
     instruction: "找到稳定位置，准备开始",
     audioCue,
     prompt,
@@ -307,6 +364,7 @@ function defaultStore() {
     version: STORAGE_VERSION,
     voiceEnabled: true,
     levels: Object.fromEntries(EXERCISES.map((exercise) => [exercise.id, 1])),
+    manualReviews: {},
     sessions: [],
   };
 }
@@ -338,6 +396,7 @@ function loadStore() {
       ...fallback,
       voiceEnabled: parsed.voiceEnabled !== false,
       levels: { ...fallback.levels, ...(parsed.levels || {}) },
+      manualReviews: { ...fallback.manualReviews, ...(parsed.manualReviews || {}) },
       sessions,
     };
   } catch (_error) {
@@ -402,7 +461,10 @@ function renderHome() {
 
       const level = document.createElement("span");
       level.className = "level-chip";
-      if (exercise.automaticProgression === false) {
+      if (store.manualReviews[exercise.id]) {
+        level.textContent = "需评估";
+        level.dataset.review = "true";
+      } else if (exercise.automaticProgression === false) {
         level.textContent = "固定";
       } else {
         level.textContent = `LV.${dose.level}`;
@@ -689,9 +751,12 @@ function applyProgression(record) {
   const goodStreak = countConsecutiveFeedback(evidence, "good", currentLevel);
   const badStreak = countConsecutiveFeedback(evidence, "bad", currentLevel);
 
+  if (record.feedback === "bad") store.manualReviews[exercise.id] = false;
+
   if (record.feedback === "bad" && badStreak >= 2) {
     const nextLevel = Math.max(1, currentLevel - 1);
     store.levels[exercise.id] = nextLevel;
+    store.manualReviews[exercise.id] = false;
     return {
       name: exercise.name,
       status: nextLevel < currentLevel ? `降至 LV.${nextLevel}` : "保持 LV.1",
@@ -703,10 +768,20 @@ function applyProgression(record) {
   if (record.feedback === "good" && goodStreak >= 3 && currentLevel < exercise.levels.length) {
     const nextLevel = currentLevel + 1;
     store.levels[exercise.id] = nextLevel;
+    store.manualReviews[exercise.id] = false;
     return { name: exercise.name, status: `升至 LV.${nextLevel}`, kind: "up", detail: "连续 3 次没问题，下一次提高一级" };
   }
 
   if (record.feedback === "good" && goodStreak >= 3 && currentLevel >= exercise.levels.length) {
+    if (exercise.manualReviewAtMax) {
+      store.manualReviews[exercise.id] = true;
+      return {
+        name: exercise.name,
+        status: "需要人工评估",
+        kind: "review",
+        detail: "LV.6 已连续 3 次没问题；保持当前剂量，请手动评估台面高度、脚距或阻力",
+      };
+    }
     return { name: exercise.name, status: `保持 LV.${currentLevel}`, kind: "hold", detail: "已达到自动调整上限" };
   }
 
@@ -730,7 +805,9 @@ function countConsecutiveFeedback(records, feedback, level) {
 }
 
 function renderSummary(adjustments) {
-  if (adjustments.some((item) => item.kind === "up")) {
+  if (adjustments.some((item) => item.kind === "review")) {
+    elements.summaryCopy.textContent = "有动作已达到自动进阶上限。系统会保持当前剂量，并在首页标记需要人工评估。";
+  } else if (adjustments.some((item) => item.kind === "up")) {
     elements.summaryCopy.textContent = "你的反馈已满足进阶条件。下面的动作会在下一次训练中增加一级，且不会超过预设上限。";
   } else if (adjustments.some((item) => item.kind === "down")) {
     elements.summaryCopy.textContent = "连续两次不舒服的动作已降低一级。下一次会自动使用更轻的剂量。";
