@@ -57,7 +57,7 @@ const EXERCISES = [
       const steps = [prepareStep(
         "high_incline_prepare",
         "High incline push-up. Use a stable kitchen counter about ten centimeters below navel height. Place your hands about shoulder-width apart, and start with your feet about eighty centimeters from the counter. Keep your body in one straight line, lightly brace your core, and squeeze your glutes.",
-        18,
+        20,
       )];
       for (let set = 1; set <= dose.sets; set += 1) {
         for (let rep = 1; rep <= dose.repsPerSet; rep += 1) {
