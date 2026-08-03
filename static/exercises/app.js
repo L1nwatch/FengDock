@@ -10,10 +10,11 @@ const EXERCISES = [
     chineseName: "猫牛式",
     purpose: "温和活动脊柱 · 不做力量进阶",
     cue: "只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
-    fixedDose: { level: 1, reps: 10, secondsPerRep: 6 },
+    fixedDose: { level: 1, reps: 10, secondsPerRep: 9 },
     automaticProgression: false,
     buildSteps(dose) {
-      const phaseDuration = dose.secondsPerRep / 2;
+      const releasePhaseDuration = 3;
+      const catPhaseDuration = dose.secondsPerRep - releasePhaseDuration;
       const steps = [prepareStep(
         "cat_cow_prepare",
         "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
@@ -21,17 +22,17 @@ const EXERCISES = [
       for (let rep = 1; rep <= dose.reps; rep += 1) {
         steps.push({
           phase: "work",
-          duration: phaseDuration,
+          duration: catPhaseDuration,
           instruction: "缓慢拱背",
           audioCue: `cat_cow_round_${rep}`,
           prompt: `Rep ${rep}. Slowly round your back.`,
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 拱背`,
           next: "接下来：缓慢回正",
-          countDown: false,
+          countDown: true,
         });
         steps.push({
           phase: "work",
-          duration: phaseDuration,
+          duration: releasePhaseDuration,
           instruction: "缓慢回正，保持舒适",
           audioCue: "cat_cow_release",
           prompt: "Now, gently release.",
