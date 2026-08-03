@@ -499,7 +499,7 @@ function startWorkout() {
     paused: false,
     remainingMs: 0,
     deadline: 0,
-    countDownSpoken: false,
+    nextCountdownSecond: 3,
     records: [],
     adjustments: [],
     results: plan.map((item) => ({
@@ -530,7 +530,7 @@ function enterCurrentStep() {
   workout.paused = false;
   workout.remainingMs = step.duration * 1000;
   workout.deadline = Date.now() + workout.remainingMs;
-  workout.countDownSpoken = false;
+  workout.nextCountdownSecond = 3;
   renderWorkout();
   speak(step.audioCue, step.prompt);
   preloadNextCue();
@@ -545,9 +545,15 @@ function tickTimer() {
   workout.remainingMs = Math.max(0, workout.deadline - Date.now());
   renderTimer(step);
 
-  if (step.countDown && !workout.countDownSpoken && workout.remainingMs <= 3200 && workout.remainingMs > 0) {
-    workout.countDownSpoken = true;
-    speak("countdown", "Three, two, one.", { interrupt: false });
+  const countdownSecond = Math.ceil(workout.remainingMs / 1000);
+  if (
+    step.countDown
+    && countdownSecond >= 1
+    && countdownSecond <= workout.nextCountdownSecond
+  ) {
+    workout.nextCountdownSecond = countdownSecond - 1;
+    const spokenNumber = ["", "One.", "Two.", "Three."][countdownSecond];
+    speak(`countdown_${countdownSecond}`, spokenNumber, { interrupt: false });
   }
 
   if (workout.remainingMs <= 0) {
@@ -936,6 +942,7 @@ async function loadAudioManifest() {
     audioManifest = await response.json();
     const firstCue = buildPlan()[0]?.steps[0]?.audioCue;
     if (firstCue) preloadCue(firstCue);
+    ["countdown_3", "countdown_2", "countdown_1"].forEach(preloadCue);
     return audioManifest;
   } catch (_error) {
     return null;

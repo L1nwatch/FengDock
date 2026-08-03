@@ -6,7 +6,9 @@
   "speed": 0.96,
   "cues": {
     "voice_enabled": "Audio guidance is on.",
-    "countdown": "Three, two, one.",
+    "countdown_3": "Three.",
+    "countdown_2": "Two.",
+    "countdown_1": "One.",
     "exercise_complete": "Exercise complete. How did that feel?",
     "exercise_skipped": "Exercise skipped. Get ready for the next movement.",
     "paused": "Paused. Take your time.",
