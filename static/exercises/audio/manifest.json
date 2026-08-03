@@ -3,7 +3,7 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-02T19:19:42Z",
+  "generated_at": "2026-08-03T20:10:50Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
@@ -184,6 +184,91 @@
       "file": "cat_cow_rep_10.a089375cd77b.mp3",
       "text": "Rep ten. Slowly round, then release.",
       "sha256": "a089375cd77bbd79fdb343ddeef085a88aa171f3d56a8ba6eb82279bf9438d56"
+    },
+    "high_incline_prepare": {
+      "file": "high_incline_prepare.71fa1eb82a33.mp3",
+      "text": "High incline push-up. Use a stable kitchen counter about ten centimeters below navel height. Place your hands about shoulder-width apart, and start with your feet about eighty centimeters from the counter. Keep your body in one straight line, lightly brace your core, and squeeze your glutes.",
+      "sha256": "71fa1eb82a33f1ba48c2591c1837214a415bfd79c8150e1a3fe08be8545bb57f"
+    },
+    "high_incline_set_1_start": {
+      "file": "high_incline_set_1_start.921b415be873.mp3",
+      "text": "Set one. Begin. Lower your chest toward the counter, then press back up.",
+      "sha256": "921b415be87346531a73ce83d9d8cf36d68a258ac6d5b1868895665fd91d9254"
+    },
+    "high_incline_set_2_start": {
+      "file": "high_incline_set_2_start.a1c21e74ccb5.mp3",
+      "text": "Set two. Begin. Lower your chest toward the counter, then press back up.",
+      "sha256": "a1c21e74ccb5dfa267c5c616e5e36e137bd1f71eaa6d4beb759eb1a6395d483e"
+    },
+    "high_incline_set_3_start": {
+      "file": "high_incline_set_3_start.54851ba07875.mp3",
+      "text": "Set three. Begin. Lower your chest toward the counter, then press back up.",
+      "sha256": "54851ba07875c6d5cce165f45bac08f9c9de88259aca19df9fa12987d9c3259f"
+    },
+    "high_incline_rest_2": {
+      "file": "high_incline_rest_2.bcd149b407d8.mp3",
+      "text": "Set one complete. Rest for ninety seconds. Set two is next.",
+      "sha256": "bcd149b407d8a2a916d492278bd3eeb4c84c9d0d26397391086b10c0b171661c"
+    },
+    "high_incline_rest_3": {
+      "file": "high_incline_rest_3.e332cd5020d9.mp3",
+      "text": "Set two complete. Rest for ninety seconds. Set three is next.",
+      "sha256": "e332cd5020d9b55fadec78ddd69855c9e1f0c58bdb24ced7af96ac8201561ce8"
+    },
+    "high_incline_rep_2": {
+      "file": "high_incline_rep_2.1328aa053f51.mp3",
+      "text": "Rep two. Lower slowly, then press up.",
+      "sha256": "1328aa053f510382bef2a754dfc99f486e10df53ceb12096abafa86a43924757"
+    },
+    "high_incline_rep_3": {
+      "file": "high_incline_rep_3.1aa41435656b.mp3",
+      "text": "Rep three. Lower slowly, then press up.",
+      "sha256": "1aa41435656b17930fd0e8a14ff7ea371f306cff0eb9ee379f944dd1797f6f77"
+    },
+    "high_incline_rep_4": {
+      "file": "high_incline_rep_4.2c800a459aa4.mp3",
+      "text": "Rep four. Lower slowly, then press up.",
+      "sha256": "2c800a459aa486c209e3fc1f0d05a437158debdfb91d295400dba5a1bf254046"
+    },
+    "high_incline_rep_5": {
+      "file": "high_incline_rep_5.7b9dc816d6a0.mp3",
+      "text": "Rep five. Lower slowly, then press up.",
+      "sha256": "7b9dc816d6a051023b0e5364507d23057acd06338a7c7a95250240fbf05ce43d"
+    },
+    "high_incline_rep_6": {
+      "file": "high_incline_rep_6.f1c444e9274c.mp3",
+      "text": "Rep six. Lower slowly, then press up.",
+      "sha256": "f1c444e9274ce73b31608b92770624e7f001e16aa8ad639223b2311408569c3d"
+    },
+    "high_incline_rep_7": {
+      "file": "high_incline_rep_7.8888e61dc5dd.mp3",
+      "text": "Rep seven. Lower slowly, then press up.",
+      "sha256": "8888e61dc5dd5c6087aaaf3782c42507199bb0287e149cc7168867ef28d9c517"
+    },
+    "high_incline_rep_8": {
+      "file": "high_incline_rep_8.382a67ff4731.mp3",
+      "text": "Rep eight. Lower slowly, then press up.",
+      "sha256": "382a67ff473182348b822c0fd04d6529ac2370917931e339a88b51723a9d8f80"
+    },
+    "high_incline_rep_9": {
+      "file": "high_incline_rep_9.4c02461decda.mp3",
+      "text": "Rep nine. Lower slowly, then press up.",
+      "sha256": "4c02461decda2f47608c33eb5eee726b54aa6f513a3cb011b15f21877283d7c6"
+    },
+    "high_incline_rep_10": {
+      "file": "high_incline_rep_10.c3a47d185831.mp3",
+      "text": "Rep ten. Lower slowly, then press up.",
+      "sha256": "c3a47d18583142f32bd56ba8d2f35e23b8729162eb3908f5784cb2b523601de0"
+    },
+    "high_incline_rep_11": {
+      "file": "high_incline_rep_11.768d1c1b8987.mp3",
+      "text": "Rep eleven. Lower slowly, then press up.",
+      "sha256": "768d1c1b8987aa1fb8f249f61873dca1f4928f5de59f7864f1aab94d7c311cc5"
+    },
+    "high_incline_rep_12": {
+      "file": "high_incline_rep_12.aaeaddf36ed7.mp3",
+      "text": "Rep twelve. Lower slowly, then press up.",
+      "sha256": "aaeaddf36ed7a08887e3634299a25b46ed18139950334468ab7a1af3a2130238"
     }
   }
 }
