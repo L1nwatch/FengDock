@@ -3,17 +3,27 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-03T20:10:50Z",
+  "generated_at": "2026-08-03T23:16:17Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
       "text": "Audio guidance is on.",
       "sha256": "901ab9f89750406f9f41a8ad463b1027b5ad89d514e2585f583873239781df62"
     },
-    "countdown": {
-      "file": "countdown.5e9474f3ff81.mp3",
-      "text": "Three, two, one.",
-      "sha256": "5e9474f3ff815bd7130cb1fcae97304ed827b5c403b3b557d74a160bf9c397a8"
+    "countdown_3": {
+      "file": "countdown_3.419cd8af81de.mp3",
+      "text": "Three.",
+      "sha256": "419cd8af81de3e2ff1158ce707d8991ccd2b1ace0366ca878607753ee3bf0f85"
+    },
+    "countdown_2": {
+      "file": "countdown_2.384027559275.mp3",
+      "text": "Two.",
+      "sha256": "384027559275086a9e5642b831e094f4874c7f560e8baf9cb2d6df86cb429ec5"
+    },
+    "countdown_1": {
+      "file": "countdown_1.970ecfeecbe5.mp3",
+      "text": "One.",
+      "sha256": "970ecfeecbe532d14a62d60943c3ffecee0a776c20fa33b96dbd8af4b10889a8"
     },
     "exercise_complete": {
       "file": "exercise_complete.b4ee08de9b21.mp3",
