@@ -13,6 +13,7 @@ const EXERCISES = [
     fixedDose: { level: 1, reps: 10, secondsPerRep: 6 },
     automaticProgression: false,
     buildSteps(dose) {
+      const phaseDuration = dose.secondsPerRep / 2;
       const steps = [prepareStep(
         "cat_cow_prepare",
         "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
@@ -20,13 +21,21 @@ const EXERCISES = [
       for (let rep = 1; rep <= dose.reps; rep += 1) {
         steps.push({
           phase: "work",
-          duration: dose.secondsPerRep,
-          instruction: "缓慢拱背，再向反方向活动",
-          audioCue: rep === 1 ? "cat_cow_start" : `cat_cow_rep_${rep}`,
-          prompt: rep === 1
-            ? "Begin cat cow. Slowly round your back, then gently release."
-            : `Rep ${rep}. Slowly round, then release.`,
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次`,
+          duration: phaseDuration,
+          instruction: "缓慢拱背",
+          audioCue: `cat_cow_round_${rep}`,
+          prompt: `Rep ${rep}. Slowly round your back.`,
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 拱背`,
+          next: "接下来：缓慢回正",
+          countDown: false,
+        });
+        steps.push({
+          phase: "work",
+          duration: phaseDuration,
+          instruction: "缓慢回正，保持舒适",
+          audioCue: "cat_cow_release",
+          prompt: "Now, gently release.",
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 回正`,
           next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次`,
           countDown: false,
         });
