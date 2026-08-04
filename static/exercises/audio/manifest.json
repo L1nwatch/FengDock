@@ -3,7 +3,7 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-03T23:24:10Z",
+  "generated_at": "2026-08-04T12:41:06Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
@@ -195,10 +195,10 @@
       "text": "Rep ten. Slowly round your back.",
       "sha256": "535956cc6cd26c099d57aaf633f462ed5da8f34aa3df117162d3f09160e39d51"
     },
-    "cat_cow_release": {
-      "file": "cat_cow_release.a02896a6d946.mp3",
-      "text": "Now, gently release.",
-      "sha256": "a02896a6d9465911bc875a083af817ef6504c354c5e2add905e2cbd3cd866d48"
+    "cat_cow_arch": {
+      "file": "cat_cow_arch.4765c5a2c060.mp3",
+      "text": "Cow. Gently arch your back and lift your chest.",
+      "sha256": "4765c5a2c060c8c26997a714cd8327b83f04a7cad0415093aa4fc7045a5f4492"
     },
     "high_incline_prepare": {
       "file": "high_incline_prepare.71fa1eb82a33.mp3",
@@ -221,14 +221,14 @@
       "sha256": "54851ba07875c6d5cce165f45bac08f9c9de88259aca19df9fa12987d9c3259f"
     },
     "high_incline_rest_2": {
-      "file": "high_incline_rest_2.bcd149b407d8.mp3",
-      "text": "Set one complete. Rest for ninety seconds. Set two is next.",
-      "sha256": "bcd149b407d8a2a916d492278bd3eeb4c84c9d0d26397391086b10c0b171661c"
+      "file": "high_incline_rest_2.b52313a307bc.mp3",
+      "text": "Set one complete. Rest for forty-five seconds. Set two is next.",
+      "sha256": "b52313a307bcb0006c963425dd5a05fb3647c30e7e593319a529ef3d2d2bcf3f"
     },
     "high_incline_rest_3": {
-      "file": "high_incline_rest_3.e332cd5020d9.mp3",
-      "text": "Set two complete. Rest for ninety seconds. Set three is next.",
-      "sha256": "e332cd5020d9b55fadec78ddd69855c9e1f0c58bdb24ced7af96ac8201561ce8"
+      "file": "high_incline_rest_3.f08d2e992f9f.mp3",
+      "text": "Set two complete. Rest for forty-five seconds. Set three is next.",
+      "sha256": "f08d2e992f9f12dc10708165cc5a0f64cc64933e5dacd0376ec3c03adff0222d"
     },
     "high_incline_rep_2": {
       "file": "high_incline_rep_2.1328aa053f51.mp3",
