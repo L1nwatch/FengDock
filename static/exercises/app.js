@@ -13,8 +13,8 @@ const EXERCISES = [
     fixedDose: { level: 1, reps: 10, secondsPerRep: 9 },
     automaticProgression: false,
     buildSteps(dose) {
-      const releasePhaseDuration = 3;
-      const catPhaseDuration = dose.secondsPerRep - releasePhaseDuration;
+      const cowPhaseDuration = 3;
+      const catPhaseDuration = dose.secondsPerRep - cowPhaseDuration;
       const steps = [prepareStep(
         "cat_cow_prepare",
         "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
@@ -27,17 +27,17 @@ const EXERCISES = [
           audioCue: `cat_cow_round_${rep}`,
           prompt: `Rep ${rep}. Slowly round your back.`,
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 拱背`,
-          next: "接下来：缓慢回正",
+          next: "接下来：牛式（塌腰抬胸）",
           countDown: true,
         });
         steps.push({
           phase: "work",
-          duration: releasePhaseDuration,
-          instruction: "缓慢回正，保持舒适",
-          audioCue: "cat_cow_release",
-          prompt: "Now, gently release.",
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 回正`,
-          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次`,
+          duration: cowPhaseDuration,
+          instruction: "缓慢塌腰并抬起胸口，保持舒适",
+          audioCue: "cat_cow_arch",
+          prompt: "Cow. Gently arch your back and lift your chest.",
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式`,
+          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次猫式`,
           countDown: false,
         });
       }
@@ -54,12 +54,12 @@ const EXERCISES = [
     purpose: "胸肌与肱三头肌力量 · 上肢线条",
     cue: "使用稳定厨房台面；双手约肩宽，脚距台面约 80 厘米；头、肩、髋、脚跟近似一线，腹部轻收并夹紧臀部；肘部与躯干约 30–45°。腰、肩或手腕不适请选“不舒服”。",
     levels: [
-      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 90, secondsPerRep: 5 },
-      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 90, secondsPerRep: 5 },
-      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 90, secondsPerRep: 5 },
-      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 90, secondsPerRep: 5 },
-      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 90, secondsPerRep: 5 },
-      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 90, secondsPerRep: 5 },
+      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 45, secondsPerRep: 5 },
+      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 45, secondsPerRep: 5 },
+      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 45, secondsPerRep: 5 },
+      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 45, secondsPerRep: 5 },
+      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 45, secondsPerRep: 5 },
+      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 45, secondsPerRep: 5 },
     ],
     maxAutoLevel: 6,
     manualReviewAtMax: true,
@@ -93,7 +93,7 @@ const EXERCISES = [
           steps.push(restStep(
             dose.restSeconds,
             `high_incline_rest_${set + 1}`,
-            `Set ${set} complete. Rest for ninety seconds. Set ${set + 1} is next.`,
+            `Set ${set} complete. Rest for forty-five seconds. Set ${set + 1} is next.`,
             `第 ${set} 组完成 / 共 ${dose.sets} 组`,
           ));
         }
@@ -170,10 +170,10 @@ const EXERCISES = [
     purpose: "躯干前侧耐力 · 抗伸展控制",
     cue: "头、躯干和骨盆大致一线；不塌腰、不抬高臀部，正常呼吸。",
     levels: [
-      { level: 1, holdSeconds: 30, sets: 3, restSeconds: 45 },
-      { level: 2, holdSeconds: 35, sets: 3, restSeconds: 45 },
-      { level: 3, holdSeconds: 40, sets: 3, restSeconds: 45 },
-      { level: 4, holdSeconds: 45, sets: 3, restSeconds: 45 },
+      { level: 1, holdSeconds: 30, sets: 3, restSeconds: 22.5 },
+      { level: 2, holdSeconds: 35, sets: 3, restSeconds: 22.5 },
+      { level: 3, holdSeconds: 40, sets: 3, restSeconds: 22.5 },
+      { level: 4, holdSeconds: 45, sets: 3, restSeconds: 22.5 },
     ],
     maxAutoLevel: 4,
     buildSteps(dose) {
@@ -213,10 +213,10 @@ const EXERCISES = [
     purpose: "躯干侧向稳定 · 抗侧屈控制",
     cue: "肩、骨盆和腿大致一线；骨盆不要下沉，身体不要前后旋转。",
     levels: [
-      { level: 1, holdSeconds: 20, setsPerSide: 2, restSeconds: 30 },
-      { level: 2, holdSeconds: 25, setsPerSide: 2, restSeconds: 30 },
-      { level: 3, holdSeconds: 30, setsPerSide: 2, restSeconds: 30 },
-      { level: 4, holdSeconds: 35, setsPerSide: 2, restSeconds: 30 },
+      { level: 1, holdSeconds: 20, setsPerSide: 2, restSeconds: 15 },
+      { level: 2, holdSeconds: 25, setsPerSide: 2, restSeconds: 15 },
+      { level: 3, holdSeconds: 30, setsPerSide: 2, restSeconds: 15 },
+      { level: 4, holdSeconds: 35, setsPerSide: 2, restSeconds: 15 },
     ],
     maxAutoLevel: 4,
     buildSteps(dose) {
@@ -326,6 +326,8 @@ let wakeLock = null;
 let toastTimer = null;
 let audioManifest = null;
 let activeAudio = null;
+const countdownAudio = new Audio();
+countdownAudio.preload = "auto";
 const audioCache = new Map();
 
 const audioManifestPromise = loadAudioManifest();
@@ -563,7 +565,7 @@ function tickTimer() {
   ) {
     workout.nextCountdownSecond = countdownSecond - 1;
     const spokenNumber = ["", "One.", "Two.", "Three."][countdownSecond];
-    speak(`countdown_${countdownSecond}`, spokenNumber, { interrupt: false });
+    speakCountdown(`countdown_${countdownSecond}`, spokenNumber);
   }
 
   if (workout.remainingMs <= 0) {
@@ -931,6 +933,22 @@ function speak(cueId, fallbackText, { interrupt = true } = {}) {
   });
 }
 
+function speakCountdown(cueId, fallbackText) {
+  if (!store.voiceEnabled || !fallbackText) return;
+  const cue = audioManifest?.cues?.[cueId];
+  if (!cue?.file) {
+    speakFallback(fallbackText, { interrupt: false });
+    return;
+  }
+
+  countdownAudio.pause();
+  countdownAudio.src = `${AUDIO_BASE_URL}/${cue.file}`;
+  countdownAudio.currentTime = 0;
+  countdownAudio.play().catch(() => {
+    speakFallback(fallbackText, { interrupt: false });
+  });
+}
+
 function speakFallback(text, { interrupt = true } = {}) {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
   if (interrupt) window.speechSynthesis.cancel();
@@ -993,6 +1011,8 @@ function stopVoice() {
     activeAudio.currentTime = 0;
     activeAudio = null;
   }
+  countdownAudio.pause();
+  countdownAudio.currentTime = 0;
   window.speechSynthesis?.cancel();
 }
 
