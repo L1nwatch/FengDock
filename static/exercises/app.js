@@ -10,10 +10,10 @@ const EXERCISES = [
     chineseName: "猫牛式",
     purpose: "温和活动脊柱 · 不做力量进阶",
     cue: "只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
-    fixedDose: { level: 1, reps: 10, secondsPerRep: 9 },
+    fixedDose: { level: 1, reps: 10, secondsPerRep: 10 },
     automaticProgression: false,
     buildSteps(dose) {
-      const cowPhaseDuration = 3;
+      const cowPhaseDuration = 4;
       const catPhaseDuration = dose.secondsPerRep - cowPhaseDuration;
       const steps = [prepareStep(
         "cat_cow_prepare",
