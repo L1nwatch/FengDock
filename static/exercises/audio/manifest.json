@@ -3,7 +3,7 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-04T12:41:06Z",
+  "generated_at": "2026-08-05T15:06:39Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
@@ -221,14 +221,14 @@
       "sha256": "54851ba07875c6d5cce165f45bac08f9c9de88259aca19df9fa12987d9c3259f"
     },
     "high_incline_rest_2": {
-      "file": "high_incline_rest_2.b52313a307bc.mp3",
-      "text": "Set one complete. Rest for forty-five seconds. Set two is next.",
-      "sha256": "b52313a307bcb0006c963425dd5a05fb3647c30e7e593319a529ef3d2d2bcf3f"
+      "file": "high_incline_rest_2.6c35ff468508.mp3",
+      "text": "Set one complete. Rest for twenty-two and a half seconds. Set two is next.",
+      "sha256": "6c35ff468508f089b2ad51efe3830b6534c975e2f74e7f542da7bbe845af0c06"
     },
     "high_incline_rest_3": {
-      "file": "high_incline_rest_3.f08d2e992f9f.mp3",
-      "text": "Set two complete. Rest for forty-five seconds. Set three is next.",
-      "sha256": "f08d2e992f9f12dc10708165cc5a0f64cc64933e5dacd0376ec3c03adff0222d"
+      "file": "high_incline_rest_3.366b8554a5ec.mp3",
+      "text": "Set two complete. Rest for twenty-two and a half seconds. Set three is next.",
+      "sha256": "366b8554a5ecc3e90dc5011f3986111e1b8c410935fdc88c0561fec2ef683bf2"
     },
     "high_incline_rep_2": {
       "file": "high_incline_rep_2.1328aa053f51.mp3",
