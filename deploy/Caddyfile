@@ -5,7 +5,20 @@
 
 xedoc.watch0.top {
     encode gzip zstd
-    reverse_proxy cli-proxy-management-center:80
+
+    @keeper path /keeper /keeper/*
+    handle @keeper {
+        reverse_proxy cpa-usage-keeper:8080
+    }
+
+    @cli_proxy_backend path /v0/management /v0/management/* /v0/resource /v0/resource/* /v1 /v1/* /v1alpha /v1alpha/* /v1beta /v1beta/*
+    handle @cli_proxy_backend {
+        reverse_proxy cli-proxy-api:8317
+    }
+
+    handle {
+        reverse_proxy cli-proxy-management-center:80
+    }
 
     log {
         output stdout

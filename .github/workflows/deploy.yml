@@ -190,8 +190,14 @@ jobs:
             MCP_AUTH_USERNAME="$MCP_AUTH_USERNAME" \
             MCP_AUTH_PASSWORD="$MCP_AUTH_PASSWORD" \
               docker compose up -d --remove-orphans
-            if ! docker network inspect fengdock_fengdock --format '{{range .Containers}}{{println .Name}}{{end}}' | grep -Fxq cli-proxy-management-center; then
-              docker network connect fengdock_fengdock cli-proxy-management-center
-            fi
+            for container in cli-proxy-management-center cli-proxy-api cpa-usage-keeper; do
+              if ! docker container inspect "$container" >/dev/null 2>&1; then
+                echo "Missing required xedoc container: $container" >&2
+                exit 1
+              fi
+              if ! docker network inspect fengdock_fengdock --format '{{range .Containers}}{{println .Name}}{{end}}' | grep -Fxq "$container"; then
+                docker network connect fengdock_fengdock "$container"
+              fi
+            done
             docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile || docker compose up -d --force-recreate caddy
             docker image prune -f
