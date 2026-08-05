@@ -9,7 +9,7 @@ const EXERCISES = [
     name: "Cat-Cow",
     chineseName: "猫牛式",
     purpose: "温和活动脊柱 · 不做力量进阶",
-    cue: "只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
+    cue: "猫式时拱背，牛式时塌腰并抬起胸口；只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
     fixedDose: { level: 1, reps: 10, secondsPerRep: 10 },
     automaticProgression: false,
     buildSteps(dose) {
@@ -23,21 +23,21 @@ const EXERCISES = [
         steps.push({
           phase: "work",
           duration: catPhaseDuration,
-          instruction: "缓慢拱背",
+          instruction: "猫式：缓慢拱背",
           audioCue: `cat_cow_round_${rep}`,
           prompt: `Rep ${rep}. Slowly round your back.`,
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 拱背`,
-          next: "接下来：牛式（拱腰抬胸）",
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 猫式拱背`,
+          next: "接下来：牛式塌腰并抬胸",
           countDown: true,
         });
         steps.push({
           phase: "work",
           duration: cowPhaseDuration,
-          instruction: "缓慢拱腰并抬起胸口，保持舒适",
+          instruction: "牛式：缓慢塌腰并抬起胸口",
           audioCue: "cat_cow_arch",
           prompt: "Cow. Gently arch your back and lift your chest.",
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式`,
-          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次猫式`,
+          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式塌腰`,
+          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次猫式拱背`,
           countDown: false,
         });
       }
