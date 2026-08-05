@@ -27,13 +27,13 @@ const EXERCISES = [
           audioCue: `cat_cow_round_${rep}`,
           prompt: `Rep ${rep}. Slowly round your back.`,
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 拱背`,
-          next: "接下来：牛式（塌腰抬胸）",
+          next: "接下来：牛式（拱腰抬胸）",
           countDown: true,
         });
         steps.push({
           phase: "work",
           duration: cowPhaseDuration,
-          instruction: "缓慢塌腰并抬起胸口，保持舒适",
+          instruction: "缓慢拱腰并抬起胸口，保持舒适",
           audioCue: "cat_cow_arch",
           prompt: "Cow. Gently arch your back and lift your chest.",
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式`,
@@ -54,12 +54,12 @@ const EXERCISES = [
     purpose: "胸肌与肱三头肌力量 · 上肢线条",
     cue: "使用稳定厨房台面；双手约肩宽，脚距台面约 80 厘米；头、肩、髋、脚跟近似一线，腹部轻收并夹紧臀部；肘部与躯干约 30–45°。腰、肩或手腕不适请选“不舒服”。",
     levels: [
-      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 45, secondsPerRep: 5 },
-      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 45, secondsPerRep: 5 },
-      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 45, secondsPerRep: 5 },
-      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 45, secondsPerRep: 5 },
-      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 45, secondsPerRep: 5 },
-      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 45, secondsPerRep: 5 },
+      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 5 },
     ],
     maxAutoLevel: 6,
     manualReviewAtMax: true,
@@ -93,7 +93,7 @@ const EXERCISES = [
           steps.push(restStep(
             dose.restSeconds,
             `high_incline_rest_${set + 1}`,
-            `Set ${set} complete. Rest for forty-five seconds. Set ${set + 1} is next.`,
+            `Set ${set} complete. Rest for twenty-two and a half seconds. Set ${set + 1} is next.`,
             `第 ${set} 组完成 / 共 ${dose.sets} 组`,
           ));
         }
