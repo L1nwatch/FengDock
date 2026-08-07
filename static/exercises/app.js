@@ -24,8 +24,8 @@ const EXERCISES = [
           phase: "work",
           duration: catPhaseDuration,
           instruction: "猫式：缓慢拱背",
-          audioCue: `cat_cow_round_${rep}`,
-          prompt: `Rep ${rep}. Slowly round your back.`,
+          audioCue: "cat_cow_cat",
+          prompt: "Cat. Slowly round your back.",
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 猫式拱背`,
           next: "接下来：牛式塌腰并抬胸",
           countDown: true,
@@ -54,12 +54,12 @@ const EXERCISES = [
     purpose: "胸肌与肱三头肌力量 · 上肢线条",
     cue: "使用稳定厨房台面；双手约肩宽，脚距台面约 80 厘米；头、肩、髋、脚跟近似一线，腹部轻收并夹紧臀部；肘部与躯干约 30–45°。腰、肩或手腕不适请选“不舒服”。",
     levels: [
-      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 5 },
-      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 5 },
-      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 5 },
-      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 5 },
-      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 5 },
-      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 5 },
+      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 3 },
+      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 3 },
+      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 3 },
+      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 3 },
+      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 3 },
+      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 3 },
     ],
     maxAutoLevel: 6,
     manualReviewAtMax: true,
@@ -80,7 +80,7 @@ const EXERCISES = [
             instruction: "胸部靠近台面，再受控推回",
             audioCue: firstRep ? `high_incline_set_${set}_start` : `high_incline_rep_${rep}`,
             prompt: firstRep
-              ? `Set ${set}. Begin. Lower your chest toward the counter, then press back up.`
+              ? `Set ${set}. Begin.`
               : `Rep ${rep}. Lower slowly, then press up.`,
             roundLabel: `第 ${set} 组 · 第 ${rep} 次 / 共 ${dose.repsPerSet} 次`,
             next: lastRep
