@@ -3,7 +3,7 @@
   "language": "en-US",
   "model": "tts-1-hd",
   "voice": "nova",
-  "generated_at": "2026-08-05T15:06:39Z",
+  "generated_at": "2026-08-07T13:44:18Z",
   "cues": {
     "voice_enabled": {
       "file": "voice_enabled.901ab9f89750.mp3",
@@ -145,6 +145,11 @@
       "text": "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
       "sha256": "637ba089200ae869d1b01ea277af40907f553b252237b0a274f45e6edcfc5505"
     },
+    "cat_cow_cat": {
+      "file": "cat_cow_cat.6de71540712e.mp3",
+      "text": "Cat. Slowly round your back.",
+      "sha256": "6de71540712e9cc104e417c05e02c77e2d5494b7065bdd9cc521fc46a3da33cb"
+    },
     "cat_cow_round_1": {
       "file": "cat_cow_round_1.105af82e25b5.mp3",
       "text": "Rep one. Slowly round your back.",
@@ -206,19 +211,19 @@
       "sha256": "71fa1eb82a33f1ba48c2591c1837214a415bfd79c8150e1a3fe08be8545bb57f"
     },
     "high_incline_set_1_start": {
-      "file": "high_incline_set_1_start.921b415be873.mp3",
-      "text": "Set one. Begin. Lower your chest toward the counter, then press back up.",
-      "sha256": "921b415be87346531a73ce83d9d8cf36d68a258ac6d5b1868895665fd91d9254"
+      "file": "high_incline_set_1_start.7f3974e8a794.mp3",
+      "text": "Set one. Begin.",
+      "sha256": "7f3974e8a794524fadbf088da9bcb3c0433f940bcbc6c5e200c9ecb499184f62"
     },
     "high_incline_set_2_start": {
-      "file": "high_incline_set_2_start.a1c21e74ccb5.mp3",
-      "text": "Set two. Begin. Lower your chest toward the counter, then press back up.",
-      "sha256": "a1c21e74ccb5dfa267c5c616e5e36e137bd1f71eaa6d4beb759eb1a6395d483e"
+      "file": "high_incline_set_2_start.e01f87489542.mp3",
+      "text": "Set two. Begin.",
+      "sha256": "e01f874895428a3bbac83ecedb59c8b6ec9211f9cf39c8390b9061d63e8eb0da"
     },
     "high_incline_set_3_start": {
-      "file": "high_incline_set_3_start.54851ba07875.mp3",
-      "text": "Set three. Begin. Lower your chest toward the counter, then press back up.",
-      "sha256": "54851ba07875c6d5cce165f45bac08f9c9de88259aca19df9fa12987d9c3259f"
+      "file": "high_incline_set_3_start.bd5c5187a2dc.mp3",
+      "text": "Set three. Begin.",
+      "sha256": "bd5c5187a2dc9230abb08b72dc08e972f95b7ee6dde2ce0ca8899c5f7561a764"
     },
     "high_incline_rest_2": {
       "file": "high_incline_rest_2.6c35ff468508.mp3",
