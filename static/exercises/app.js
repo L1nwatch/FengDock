@@ -38,7 +38,7 @@ const EXERCISES = [
           prompt: "Cow. Gently arch your back and lift your chest.",
           roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式塌腰`,
           next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次猫式拱背`,
-          countDown: false,
+          countDown: true,
         });
       }
       return steps;
