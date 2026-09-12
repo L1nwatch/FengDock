@@ -125,7 +125,7 @@ http://vultr.tailde302.ts.net {
         reverse_proxy backend:8004
     }
 
-    @celpip_api path /api/submissions /api/drafts /api/recordings /api/writing-assessments
+    @celpip_api path /api/submissions /api/drafts /api/recordings /api/writing-assessments /api/reviews
     handle @celpip_api {
         reverse_proxy backend:8004
     }
