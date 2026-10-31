@@ -2,6 +2,12 @@
 
 For changes inside `vendor/fire`, `vendor/TriggerToDo`, or another submodule.
 
+Production images are rebuilt from published repository commits. Changes made only
+in the server working tree or a running container are replaced by the next
+deployment. For a lasting production fix, publish the submodule change, update
+FengDock's tracked submodule commit, and verify the deployment workflow and live
+behavior before reporting completion.
+
 ## Publish Submodule
 
 Push the submodule `main` before updating `FengDock/main`. Stop if the fast-forward merge fails.
