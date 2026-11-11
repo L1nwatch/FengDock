@@ -28,6 +28,17 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from app.mcp_auth import PersistentOAuthProvider
+from vendor.TriggerToDo.app.scrum_contract import (
+    ScrumChanges,
+    ScrumDate,
+    ScrumId,
+    ScrumItemBatch,
+    ScrumItemBatchResult,
+    ScrumName,
+    ScrumOperations,
+    ScrumState,
+    SprintStatus,
+)
 
 
 provider = PersistentOAuthProvider()
@@ -49,8 +60,9 @@ mcp = FastMCP(
     name="FengDock",
     instructions=(
         "Read access to the owner's TriggerToDo planning data, Fire personal finance data, and "
-        "Conclusion decision knowledge base. Conclusion create/update tools write data and must only "
-        "be used when the user explicitly asks to save or update a conclusion. No tool deletes data, "
+        "Conclusion decision knowledge base. Use the Scrum write tools when the user asks to change a "
+        "Sprint or its backlog, and Conclusion write tools when asked to save or update a conclusion. "
+        "Removing a Scrum item unlinks it from its Sprint and keeps the underlying task. No tool deletes tasks, "
         "runs triggers, refreshes finance data, or synchronizes external systems."
     ),
     auth_server_provider=provider,
@@ -174,10 +186,10 @@ def _validation_tool_error(error: ValidationError) -> ToolError:
     return ToolError(f"Invalid Conclusion input at {location}: {first['msg']}")
 
 
-def _require_conclusion_write_scope() -> None:
+def _require_write_scope(service: str) -> None:
     token = get_access_token()
     if token is not None and "fengdock:write" not in token.scopes:
-        raise ToolError("Conclusion writes require the fengdock:write OAuth scope")
+        raise ToolError(f"{service} writes require the fengdock:write OAuth scope")
 
 
 def _iso_date(value: str | None, field_name: str) -> str | None:
@@ -320,6 +332,28 @@ async def _get_json(base_url: str, path: str, params: dict[str, Any] | None = No
             return response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise ToolError("The internal data service is currently unavailable") from exc
+
+
+async def _write_scrum_json(method: str, path: str, payload: dict[str, Any]) -> Any:
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.request(method, f"{TRIGGER_URL}{path}", json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (400, 404, 409, 422):
+            try:
+                detail = exc.response.json()["detail"]
+            except (ValueError, KeyError, TypeError):
+                detail = exc.response.reason_phrase
+            if isinstance(detail, list) and detail:
+                first = detail[0]
+                location = ".".join(str(part) for part in first["loc"])
+                detail = f"{location}: {first['msg']}"
+            raise ToolError(f"TriggerToDo rejected the Scrum write ({exc.response.status_code}): {detail}") from None
+    except (httpx.HTTPError, ValueError):
+        pass
+    raise ToolError("TriggerToDo could not confirm the Scrum write. Check list_scrums before retrying.")
 
 
 @mcp.custom_route("/login", methods=["GET"])
@@ -531,6 +565,55 @@ async def list_scrums(
     return _page(compact, 1 if scrum_id is not None else limit)
 
 
+@mcp.tool(annotations=write_tool)
+async def create_scrum(
+    name: ScrumName,
+    start_date: ScrumDate,
+    end_date: ScrumDate,
+    goal: str | None = None,
+    status: SprintStatus = "draft",
+) -> ScrumState:
+    """Create a Sprint with YYYY-MM-DD dates. Add its backlog using manage_scrum_items."""
+    _require_write_scope("Scrum")
+    data = await _write_scrum_json("POST", "/api/scrums", {
+        "name": name,
+        "goal": goal,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "status": status,
+    })
+    return ScrumState.model_validate(data)
+
+
+@mcp.tool(annotations=write_tool)
+async def update_scrum(scrum_id: ScrumId, changes: ScrumChanges) -> ScrumState:
+    """Update a Sprint's name, goal, dates, or status. Omitted fields keep their current values."""
+    _require_write_scope("Scrum")
+    data = await _write_scrum_json(
+        "PATCH", f"/api/scrums/{scrum_id}", changes.model_dump(mode="json", exclude_unset=True)
+    )
+    return ScrumState.model_validate(data)
+
+
+@mcp.tool(annotations=write_tool.model_copy(update={"destructiveHint": True}))
+async def manage_scrum_items(
+    scrum_id: ScrumId,
+    operations: ScrumOperations,
+    destination_scrum_id: ScrumId | None = None,
+) -> ScrumItemBatchResult:
+    """Link existing tasks, create new stories, edit items, remove links, or move unfinished items.
+
+    Use search_todos for list_id and task_id, and list_scrums with include_tasks for item_id.
+    Moves require the destination Sprint ID. All operations commit together. Results are in input order.
+    """
+    _require_write_scope("Scrum")
+    payload = ScrumItemBatch(operations=operations, destination_scrum_id=destination_scrum_id)
+    data = await _write_scrum_json(
+        "POST", f"/internal/scrums/{scrum_id}/items", payload.model_dump(mode="json", exclude_unset=True)
+    )
+    return ScrumItemBatchResult.model_validate(data)
+
+
 @mcp.tool(annotations=read_only)
 async def list_routine_checks(
     start_date: str = Field(description="Inclusive ISO date (YYYY-MM-DD)"),
@@ -712,7 +795,7 @@ async def create_conclusion(
     ] = None,
 ) -> dict[str, Any]:
     """Create a Conclusion only when the user explicitly asks to save the decision."""
-    _require_conclusion_write_scope()
+    _require_write_scope("Conclusion")
 
     def write() -> dict[str, Any]:
         db, schemas = _conclusion_modules()
@@ -770,7 +853,7 @@ async def update_conclusion(
     ] = None,
 ) -> dict[str, Any]:
     """Update specified Conclusion fields with optimistic concurrency protection."""
-    _require_conclusion_write_scope()
+    _require_write_scope("Conclusion")
 
     def write() -> dict[str, Any]:
         db, schemas = _conclusion_modules()
@@ -885,7 +968,7 @@ async def create_decision_model(
     ),
 ) -> dict[str, Any]:
     """Register a thinking model with only a name and concise explanation."""
-    _require_conclusion_write_scope()
+    _require_write_scope("Conclusion")
 
     def write() -> dict[str, Any]:
         db, schemas = _conclusion_modules()
@@ -929,7 +1012,7 @@ async def update_decision_model(
     ),
 ) -> dict[str, Any]:
     """Edit a thinking model definition in place."""
-    _require_conclusion_write_scope()
+    _require_write_scope("Conclusion")
 
     def write() -> dict[str, Any]:
         db, schemas = _conclusion_modules()

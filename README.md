@@ -113,8 +113,9 @@ No extra registry credentials are required; the workflow logs into GHCR with `GI
 ## ChatGPT MCP
 
 The deployment exposes a Streamable HTTP MCP server at `https://watch0.top/mcp`. It uses OAuth 2.1
-with PKCE and dynamic client registration. TriggerToDo and Fire tools are read-only. Conclusion adds
-bounded read tools plus explicit non-destructive write tools:
+with PKCE and dynamic client registration. Use `create_scrum`, `update_scrum`, and `manage_scrum_items`
+to manage TriggerToDo Sprints. See the [Scrum MCP contract](docs/scrum-mcp.md) for payloads and examples.
+Fire tools provide read access. Conclusion exposes these tools.
 
 - `list_conclusions`, `search_conclusions`, `get_conclusion`
 - `create_conclusion`, `update_conclusion`
@@ -135,8 +136,7 @@ GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repositor
 - `MCP_AUTH_PASSWORD` – required secret; when empty, authorization is disabled
 
 In ChatGPT, enable Developer mode, create an app using `https://watch0.top/mcp`, and select OAuth.
-Existing connections authorized before Conclusion was added retain read access but must be reauthorized
-to receive the `fengdock:write` scope before calling Conclusion create/update tools.
+Reauthorize read-only connections to grant `fengdock:write` before calling Scrum or Conclusion write tools.
 
 ## Useful Commands
 

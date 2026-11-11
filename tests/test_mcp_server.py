@@ -5,10 +5,12 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
+import json
 import sys
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 import pytest
 from starlette.testclient import TestClient
 
@@ -56,6 +58,9 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         "update_conclusion",
         "create_decision_model",
         "update_decision_model",
+        "create_scrum",
+        "update_scrum",
+        "manage_scrum_items",
     }
     assert "delete_decision_model" not in by_name
     assert {name for name, tool in by_name.items() if not tool.annotations.readOnlyHint} == write_names
@@ -64,7 +69,7 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         for name, tool in by_name.items()
         if name not in write_names
     )
-    assert all(tool.annotations and tool.annotations.destructiveHint is False for tool in tools)
+    assert {tool.name for tool in tools if tool.annotations.destructiveHint} == {"manage_scrum_items"}
 
 
 def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch):
@@ -167,7 +172,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert listed.status_code == 200, listed.text
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 20
+        assert len(tools) == 23
         assert {tool["name"] for tool in tools} >= {
             "search_todos",
             "get_finance_overview",
@@ -176,8 +181,16 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
             "update_conclusion",
             "list_decision_models",
             "update_decision_model",
+            "create_scrum",
+            "update_scrum",
+            "manage_scrum_items",
         }
         schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools}
+        assert schemas["create_scrum"]["start_date"]["format"] == "date"
+        assert schemas["manage_scrum_items"]["operations"]["maxItems"] == 100
+        assert set(schemas["manage_scrum_items"]["operations"]["items"]["discriminator"]["mapping"]) == {
+            "add", "create", "update", "remove", "move",
+        }
         assert schemas["list_scrums"]["status"]["default"] == "active"
         assert schemas["list_scrums"]["include_tasks"]["default"] is False
         assert schemas["list_scrums"]["limit"]["default"] == 5
@@ -186,6 +199,86 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert schemas["get_investments"]["snapshot_limit"]["default"] == 1
         assert schemas["list_conclusions"]["limit"]["default"] == 50
         assert "delete_decision_model" not in schemas
+
+
+def test_scrum_mcp_writes_validate_arguments_forward_to_api_and_require_write_scope(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    state = {
+        "id": 1,
+        "name": "Next Sprint",
+        "goal": "Ship the backlog",
+        "start_date": "2026-11-16",
+        "end_date": "2026-11-20",
+        "target_points": 0,
+        "status": "draft",
+        "completed_at": None,
+        "updated_at": "2026-11-11T10:00:00Z",
+        "summary": {
+            "items": 0, "points": 0, "done_points": 0,
+            "points_by_status": {}, "count_by_status": {}, "added_after_start": 0,
+        },
+        "items": [],
+    }
+    requests = []
+
+    def trigger_api(request):
+        body = json.loads(request.content)
+        requests.append((request.method, request.url.path, body))
+        if request.url.path.endswith("/items"):
+            return httpx.Response(409, json={"detail": "operations[0]: Task is already in Scrum 1"})
+        return httpx.Response(200, json=state)
+
+    original_client = httpx.AsyncClient
+    transport = httpx.MockTransport(trigger_api)
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda **kwargs: original_client(transport=transport, **kwargs))
+
+    arguments = {
+        "create_scrum": {
+            "name": " Next Sprint ", "start_date": "2026-11-16", "end_date": "2026-11-20",
+            "goal": "Ship the backlog",
+        },
+        "update_scrum": {"scrum_id": 1, "changes": {"goal": None, "end_date": "2026-11-21"}},
+        "manage_scrum_items": {
+            "scrum_id": 1, "operations": [{"action": "add", "list_id": "inbox", "task_id": "task-1"}],
+        },
+    }
+    read_token = module.provider._issue_tokens("test", ["fengdock:read"], "owner", module.provider.resource_url)
+    write_token = module.provider._issue_tokens("test", module.provider.scopes, "owner", module.provider.resource_url)
+    with TestClient(module.app, base_url="https://watch0.top") as client:
+        def call(name, args, token=write_token):
+            response = client.post(
+                "/mcp",
+                headers={"Authorization": f"Bearer {token.access_token}", "Accept": "application/json, text/event-stream"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}},
+            )
+            assert response.status_code == 200, response.text
+            return response.json()["result"]
+
+        for name, args in arguments.items():
+            error = call(name, args, read_token)
+            assert error["isError"] and "fengdock:write" in error["content"][0]["text"]
+        assert call("create_scrum", {**arguments["create_scrum"], "start_date": "20261116"})["isError"]
+        assert call("update_scrum", {"scrum_id": 1, "changes": {"status": None}})["isError"]
+        assert call("manage_scrum_items", {
+            "scrum_id": 1, "operations": [{"action": "create", "title": "Story", "points": -1}],
+        })["isError"]
+        assert call("manage_scrum_items", {
+            "scrum_id": 1, "operations": [{"action": "move", "item_id": 1}],
+        })["isError"]
+        assert requests == []
+
+        assert call("create_scrum", arguments["create_scrum"])["structuredContent"]["id"] == 1
+        assert call("update_scrum", arguments["update_scrum"])["structuredContent"]["id"] == 1
+        error = call("manage_scrum_items", arguments["manage_scrum_items"])
+        assert error["isError"] and "operations[0]: Task is already in Scrum 1" in error["content"][0]["text"]
+        assert requests == [
+            ("POST", "/api/scrums", {**arguments["create_scrum"], "name": "Next Sprint", "status": "draft"}),
+            ("PATCH", "/api/scrums/1", {"goal": None, "end_date": "2026-11-21"}),
+            (
+                "POST", "/internal/scrums/1/items",
+                {"operations": arguments["manage_scrum_items"]["operations"], "destination_scrum_id": None},
+            ),
+        ]
 
 
 def test_conclusion_writes_require_write_scope(tmp_path, monkeypatch):
