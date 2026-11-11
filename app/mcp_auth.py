@@ -146,7 +146,8 @@ class PersistentOAuthProvider:
             ).fetchone()
         if not row:
             raise HTTPException(400, "Authorization request expired or invalid")
-        redirect_uri = urlsplit(json.loads(row["payload"])["redirect_uri"])
+        state = json.loads(row["payload"])
+        redirect_uri = urlsplit(state["redirect_uri"])
         redirect_host = redirect_uri.hostname or ""
         if ":" in redirect_host:
             redirect_host = f"[{redirect_host}]"
@@ -159,6 +160,11 @@ class PersistentOAuthProvider:
             if self.password
             else "MCP_AUTH_PASSWORD is not configured on the server."
         )
+        access_label = (
+            "Authorize read access and writes to Scrum and Conclusion"
+            if "fengdock:write" in state["scopes"]
+            else "Authorize read access"
+        )
         content = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Authorize FengDock</title>
@@ -169,7 +175,7 @@ button{{margin-top:22px;padding:11px 18px;border:0;border-radius:8px;background:
 <form action="/login/callback" method="post">
 <input type="hidden" name="nonce" value="{html.escape(nonce, quote=True)}">
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
-<button type="submit"{disabled}>Authorize read and Conclusion write access</button></form></body></html>"""
+<button type="submit"{disabled}>{access_label}</button></form></body></html>"""
         return HTMLResponse(
             content,
             headers={
