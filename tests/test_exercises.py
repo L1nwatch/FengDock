@@ -9,12 +9,20 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_homepage_exercises_link_describes_the_training_plan():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'data-description="腰背、肩胛与肱二头肌训练"' in response.text
+    assert 'href="/exercises/"' in response.text
+
+
 def test_exercises_get_returns_app():
     response = client.get("/exercises/")
 
     assert response.status_code == 200
     body = response.text
-    assert "每日腰背训练" in body
+    assert '<h1 id="home-title">腰背、肩胛与肱二头肌训练</h1>' in body
     assert 'id="start-button"' in body
     assert 'id="feedback-form"' in body
     assert 'name="feedback" value="+"' in body
