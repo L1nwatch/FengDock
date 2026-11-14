@@ -11,10 +11,10 @@ import sys
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
-from pydantic import AnyHttpUrl, Field, ValidationError
+from pydantic import AnyHttpUrl, Field, StrictStr, ValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -28,6 +28,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from app.mcp_auth import PersistentOAuthProvider
+from app.mcp_todo import Priority, TodoChanges, TodoCompletion, TodoId, TodoLabel, TodoState, TodoTitle, WorkflowStatus
 from vendor.TriggerToDo.app.scrum_contract import (
     ScrumChanges,
     ScrumDate,
@@ -38,6 +39,16 @@ from vendor.TriggerToDo.app.scrum_contract import (
     ScrumOperations,
     ScrumState,
     SprintStatus,
+)
+from vendor.TriggerToDo.app.todo_contract import (
+    DEFAULT_LIST_ID,
+    DateScheduleChanges,
+    DueAt,
+    IanaTimezone,
+    IdempotencyKey,
+    RecurrenceInterval,
+    TriggerType,
+    schedule_patch,
 )
 
 
@@ -60,7 +71,10 @@ mcp = FastMCP(
     name="FengDock",
     instructions=(
         "Read access to the owner's TriggerToDo planning data, Fire personal finance data, and "
-        "Conclusion decision knowledge base. Use the Scrum write tools when the user asks to change a "
+        "Conclusion decision knowledge base. Use create_todo, update_todo, and complete_todo for ordinary "
+        "TriggerToDo tasks, including dates and recurrence. Use list_todo_lists and search_todos to find or "
+        "verify tasks. Date triggers control Today visibility and do not send notifications. "
+        "Use the Scrum write tools when the user asks to change a "
         "Sprint or its backlog, and Conclusion write tools when asked to save or update a conclusion. "
         "Removing a Scrum item unlinks it from its Sprint and keeps the underlying task. No tool deletes tasks, "
         "runs triggers, refreshes finance data, or synchronizes external systems."
@@ -334,10 +348,19 @@ async def _get_json(base_url: str, path: str, params: dict[str, Any] | None = No
         raise ToolError("The internal data service is currently unavailable") from exc
 
 
-async def _write_scrum_json(method: str, path: str, payload: dict[str, Any]) -> Any:
+async def _write_trigger_json(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None,
+    *,
+    operation: str,
+    verify_tool: str,
+    idempotency_key: str | None = None,
+) -> Any:
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.request(method, f"{TRIGGER_URL}{path}", json=payload)
+            headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+            response = await client.request(method, f"{TRIGGER_URL}{path}", json=payload, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as exc:
@@ -350,10 +373,15 @@ async def _write_scrum_json(method: str, path: str, payload: dict[str, Any]) -> 
                 first = detail[0]
                 location = ".".join(str(part) for part in first["loc"])
                 detail = f"{location}: {first['msg']}"
-            raise ToolError(f"TriggerToDo rejected the Scrum write ({exc.response.status_code}): {detail}") from None
+            raise ToolError(f"TriggerToDo rejected the {operation} ({exc.response.status_code}): {detail}") from None
     except (httpx.HTTPError, ValueError):
         pass
-    raise ToolError("TriggerToDo could not confirm the Scrum write. Check list_scrums before retrying.")
+    retry = " If resubmitting, reuse the original idempotency_key." if idempotency_key else ""
+    raise ToolError(f"TriggerToDo could not confirm the {operation}. Check {verify_tool} before retrying.{retry}")
+
+
+async def _write_scrum_json(method: str, path: str, payload: dict[str, Any]) -> Any:
+    return await _write_trigger_json(method, path, payload, operation="Scrum write", verify_tool="list_scrums")
 
 
 @mcp.custom_route("/login", methods=["GET"])
@@ -436,6 +464,87 @@ async def search_todos(
             item.pop("recurrenceJson", None)
         returned.append(item)
     return {"count": total, "returned": len(returned), "truncated": total > len(returned), "items": returned}
+
+
+@mcp.tool(annotations=write_tool)
+async def create_todo(
+    title: TodoTitle,
+    description: StrictStr | None = None,
+    list_id: TodoId | None = None,
+    priority: Priority = "normal",
+    due_at: DueAt | None = None,
+    timezone: IanaTimezone | None = None,
+    trigger_type: TriggerType = "none",
+    recurrence_interval: RecurrenceInterval | None = None,
+    workflow_status: WorkflowStatus | None = None,
+    epic_key: TodoLabel | None = None,
+    pool: TodoLabel | None = None,
+    idempotency_key: IdempotencyKey | None = None,
+) -> TodoState:
+    """Create an ordinary TriggerToDo task in Inbox or a list from list_todo_lists.
+
+    For scheduled visibility in Today, select a date trigger and provide due_at in RFC3339
+    with an offset. Provide an IANA timezone to preserve local recurring times (default UTC).
+    Generate an idempotency_key once per intended task and reuse it on retries. After an
+    uncertain result, verify the task with search_todos before resubmitting.
+    """
+    _require_write_scope("Todo")
+    try:
+        payload = schedule_patch(DateScheduleChanges(
+            due_at=due_at, timezone=timezone, trigger_type=trigger_type, recurrence_interval=recurrence_interval,
+        ))
+    except (ValueError, OverflowError) as exc:
+        raise ToolError(str(exc)) from exc
+
+    payload.update(title=title, importance=priority)
+    if description is not None:
+        payload["body"] = {"contentType": "text", "content": description}
+    payload["extensions"].update(
+        wfStatus=workflow_status or ("todo" if trigger_type == "none" else "wait-for-trigger"),
+        epicKey=epic_key,
+        pool=pool,
+    )
+    path = f"/api/todo/lists/{quote(list_id or DEFAULT_LIST_ID, safe='')}/tasks"
+    if list_id is not None:
+        path += "?strict_list=true"
+    result = await _write_trigger_json(
+        "POST", path, payload, operation="Todo creation", verify_tool="search_todos", idempotency_key=idempotency_key,
+    )
+    return TodoState.from_rest(result)
+
+
+@mcp.tool(annotations=write_tool)
+async def update_todo(list_id: TodoId, task_id: TodoId, changes: TodoChanges) -> TodoState:
+    """Update an existing task by list_id and task_id from search_todos.
+
+    Include only fields to change. Use null to clear optional values. Setting trigger_type
+    to none clears the date trigger and its recurrence. To also remove the deadline,
+    include due_at: null. Use complete_todo for completion with next-occurrence details.
+    """
+    _require_write_scope("Todo")
+    result = await _write_trigger_json(
+        "PATCH", f"/api/todo/lists/{quote(list_id, safe='')}/tasks/{quote(task_id, safe='')}",
+        changes.to_rest_patch(), operation="Todo update", verify_tool="search_todos",
+    )
+    return TodoState.from_rest(result)
+
+
+@mcp.tool(annotations=write_tool)
+async def complete_todo(list_id: TodoId, task_id: TodoId) -> TodoCompletion:
+    """Complete one TriggerToDo task and return the next occurrence when it repeats.
+
+    Use list_id and task_id from search_todos. Completing the same task again will return
+    its existing result without generating another occurrence.
+    """
+    _require_write_scope("Todo")
+    result = await _write_trigger_json(
+        "POST", f"/api/todo/lists/{quote(list_id, safe='')}/tasks/{quote(task_id, safe='')}/complete",
+        None, operation="Todo completion", verify_tool="search_todos",
+    )
+    return TodoCompletion(
+        task=TodoState.from_rest(result), already_completed=result["alreadyCompleted"],
+        next_task=TodoState.from_rest(result["nextTask"]) if result["nextTask"] else None,
+    )
 
 
 @mcp.tool(annotations=read_only)

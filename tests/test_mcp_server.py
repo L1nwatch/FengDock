@@ -54,6 +54,9 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
     assert tools
     by_name = {tool.name: tool for tool in tools}
     write_names = {
+        "create_todo",
+        "update_todo",
+        "complete_todo",
         "create_conclusion",
         "update_conclusion",
         "create_decision_model",
@@ -113,7 +116,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         assert login_page.status_code == 200
         assert 'name="password"' in login_page.text
         assert 'name="username"' not in login_page.text
-        assert "Authorize read access and writes to Scrum and Conclusion" in login_page.text
+        assert "Authorize read access and writes to TriggerToDo, Scrum, and Conclusion" in login_page.text
         assert "form-action 'self' https://chatgpt.com" in login_page.headers["content-security-policy"]
 
         login = client.post(
@@ -173,9 +176,12 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert listed.status_code == 200, listed.text
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 23
+        assert len(tools) == 26
         assert {tool["name"] for tool in tools} >= {
             "search_todos",
+            "create_todo",
+            "update_todo",
+            "complete_todo",
             "get_finance_overview",
             "search_conclusions",
             "create_conclusion",
@@ -187,6 +193,10 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
             "manage_scrum_items",
         }
         schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools}
+        assert schemas["create_todo"]["due_at"]["anyOf"][0]["format"] == "date-time"
+        assert schemas["create_todo"]["recurrence_interval"]["anyOf"][0]["minimum"] == 1
+        assert set(schemas["complete_todo"]) == {"list_id", "task_id"}
+        assert schemas["update_todo"]["changes"]["$ref"] == "#/$defs/TodoChanges"
         assert schemas["create_scrum"]["start_date"]["format"] == "date"
         assert schemas["manage_scrum_items"]["operations"]["maxItems"] == 100
         assert set(schemas["manage_scrum_items"]["operations"]["items"]["discriminator"]["mapping"]) == {
@@ -592,3 +602,121 @@ def test_trigger_tools_default_to_bounded_summaries(tmp_path, monkeypatch):
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         executor.submit(asyncio.run, scenario()).result()
+
+
+def test_todo_mcp_validates_scope_arguments_and_rest_mapping(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    requests = []
+    task = {
+        "id": "task-1", "listId": "local-list-inbox", "title": "增肌实验 12 周复盘",
+        "body": {"contentType": "text", "content": "检查训练进展"},
+        "dueDateTime": {"dateTime": "2027-02-09T00:00:00Z", "timeZone": "America/Toronto"},
+        "importance": "normal", "status": "notStarted", "recurrence": None,
+        "extensions": [{
+            "extensionName": "com.triggertodo.meta", "source": "triggertodo",
+            "triggerRef": "date", "wfStatus": "wait-for-trigger",
+        }],
+    }
+    args = {
+        "title": task["title"], "description": task["body"]["content"],
+        "due_at": "2027-02-08T19:00:00-05:00", "timezone": "America/Toronto", "trigger_type": "date",
+    }
+    ids = {"list_id": "local-list-inbox", "task_id": "task-1"}
+
+    def trigger_api(request):
+        requests.append(request)
+        if "/missing/" in request.url.path:
+            return httpx.Response(404, json={"detail": "List missing not found"})
+        if "/missing-task" in request.url.path:
+            return httpx.Response(404, json={"detail": "Task not found in the specified list"})
+        if request.headers.get("Idempotency-Key") == "timed-out-request":
+            raise httpx.ReadTimeout("Network interrupted", request=request)
+        if request.url.path.endswith("/complete"):
+            return httpx.Response(200, json={**task, "status": "completed", "alreadyCompleted": False, "nextTask": None})
+        if request.method == "PATCH":
+            return httpx.Response(200, json={**task, "body": {"content": ""}})
+        return httpx.Response(200, json=task)
+
+    original_client = httpx.AsyncClient
+    transport = httpx.MockTransport(trigger_api)
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda **kwargs: original_client(transport=transport, **kwargs))
+
+    read_token = module.provider._issue_tokens("test", ["fengdock:read"], "owner", module.provider.resource_url)
+    write_token = module.provider._issue_tokens("test", module.provider.scopes, "owner", module.provider.resource_url)
+    with TestClient(module.app, base_url="https://watch0.top") as client:
+        def call(name, arguments, token=write_token):
+            response = client.post(
+                "/mcp",
+                headers={"Authorization": f"Bearer {token.access_token}", "Accept": "application/json, text/event-stream"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}},
+            )
+            assert response.status_code == 200, response.text
+            return response.json()["result"]
+
+        for name, arguments in {
+            "create_todo": args,
+            "update_todo": {**ids, "changes": {"title": "Updated"}},
+            "complete_todo": ids,
+        }.items():
+            result = call(name, arguments, read_token)
+            assert result["isError"] and "fengdock:write" in result["content"][0]["text"]
+
+        for invalid_args in (
+            {"title": "  "},
+            {"title": 123},
+            {"due_at": None},
+            {"due_at": "2027-02-08T19:00:00"},
+            {"due_at": "2027-02-30T19:00:00-05:00"},
+            {"due_at": "2027-02-08T19:00:00-05:60"},
+            {"timezone": "Mars/Olympus"},
+            {"trigger_type": "date:fortnightly"},
+            {"recurrence_interval": 0},
+            {"recurrence_interval": "2", "trigger_type": "date:weekly"},
+            {"recurrence_interval": True, "trigger_type": "date:weekly"},
+            {"recurrence_interval": 2},
+            {"priority": "urgent"},
+            {"list_id": "../other"},
+        ):
+            assert call("create_todo", {**args, **invalid_args})["isError"], invalid_args
+
+        for changes in ({}, {"title": None}, {"task_status": None}, {"trigger_ref": "date"}, {"recurrence_interval": -1}):
+            assert call("update_todo", {**ids, "changes": changes})["isError"], changes
+        assert requests == []
+
+        created = call("create_todo", {**args, "idempotency_key": "test-create"})["structuredContent"]
+        assert created["task_id"] == "task-1" and created["list_id"] == "local-list-inbox"
+        assert created["workflow_status"] == "wait-for-trigger"
+        assert created["due_at"] == "2027-02-09T00:00:00Z" and created["trigger_ref"] == "date"
+        assert requests[-1].url.path == "/api/todo/lists/local-list-inbox/tasks"
+        assert requests[-1].headers["Idempotency-Key"] == "test-create"
+        assert json.loads(requests[-1].content) == {
+            "title": task["title"], "body": task["body"], "importance": "normal", "recurrence": None,
+            "dueDateTime": task["dueDateTime"],
+            "extensions": {"triggerRef": "date", "wfStatus": "wait-for-trigger", "pool": None, "epicKey": None},
+        }
+        call("create_todo", {**args, "trigger_type": "date:weekly", "list_id": ids["list_id"], "recurrence_interval": 2})
+        assert requests[-1].url.params["strict_list"] == "true"
+        assert json.loads(requests[-1].content)["recurrence"] == {
+            "pattern": {"type": "weekly", "interval": 2}, "range": {"type": "noEnd", "startDate": "2027-02-08"},
+        }
+
+        updated = call(
+            "update_todo", {**ids, "changes": {"description": None, "recurrence_interval": 3, "pool": None}},
+        )["structuredContent"]
+        assert updated["description"] == "" and updated["trigger_ref"] == "date"
+        assert json.loads(requests[-1].content) == {
+            "body": None, "date_schedule": {"recurrence_interval": 3}, "extensions": {"pool": None},
+        }
+        completed = call("complete_todo", ids)["structuredContent"]
+        assert completed["task"]["task_status"] == "completed"
+        assert completed["next_task"] is None
+        assert requests[-1].method == "POST" and requests[-1].url.path.endswith("/task-1/complete")
+
+        result = call("create_todo", {**args, "list_id": "missing"})
+        assert result["isError"] and "List missing not found" in result["content"][0]["text"]
+        result = call("complete_todo", {**ids, "task_id": "missing-task"})
+        assert result["isError"] and "Task not found" in result["content"][0]["text"]
+        before = len(requests)
+        result = call("create_todo", {**args, "idempotency_key": "timed-out-request"})
+        assert result["isError"] and "Check search_todos before retrying" in result["content"][0]["text"]
+        assert len(requests) == before + 1

@@ -161,7 +161,7 @@ class PersistentOAuthProvider:
             else "MCP_AUTH_PASSWORD is not configured on the server."
         )
         access_label = (
-            "Authorize read access and writes to Scrum and Conclusion"
+            "Authorize read access and writes to TriggerToDo, Scrum, and Conclusion"
             if "fengdock:write" in state["scopes"]
             else "Authorize read access"
         )
