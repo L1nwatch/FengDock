@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4f1e8">
     <title>每日腰背训练 · FengDock</title>
-    <meta name="description" content="带语音引导、训练记录和动态调整的每日腰背康复训练执行器。">
+    <meta name="description" content="腰背、肩胛和手臂训练，支持语音引导、恢复确认和自动进阶。">
     <link rel="stylesheet" href="/static/articles/Poppins.css">
-    <link rel="stylesheet" href="/static/exercises/style.css?v=20260803011000">
+    <link rel="stylesheet" href="/static/exercises/style.css?v=3">
     <link rel="shortcut icon" href="/static/favicon.ico">
 </head>
 <body>
@@ -27,61 +27,67 @@
     <section id="home-view" class="view" aria-labelledby="home-title">
         <div class="hero">
             <p class="eyebrow" id="today-label">今天</p>
-            <h1 id="home-title">把今天的腰背训练<br>安静地做完。</h1>
-            <p class="hero__copy">不用盯着屏幕。开始后会逐步语音提醒动作、换边、休息和下一组。</p>
+            <h1 id="home-title">每日腰背训练</h1>
+            <p class="hero__copy">按自己的节奏完成腰背、肩胛和手臂训练。计时引导会提示动作、换边和休息。</p>
         </div>
+
+        <section id="recovery-panel" class="today-card recovery-panel" aria-labelledby="recovery-title" hidden>
+            <h2 id="recovery-title">恢复确认</h2>
+            <p class="last-session-note">上次训练当天或次日，疼痛或原有症状有加重吗？</p>
+            <div id="recovery-list"></div>
+        </section>
 
         <section class="today-card" aria-labelledby="today-title">
             <div class="today-card__topline">
-                <div>
-                    <p class="section-kicker">TODAY'S SESSION</p>
-                    <h2 id="today-title">今日训练</h2>
-                </div>
-                <div class="duration-pill"><strong id="plan-duration">—</strong><span>分钟</span></div>
+                <h2 id="today-title">今日计划</h2>
+                <div class="duration-pill"><strong id="plan-duration">—</strong><span>分钟康复</span></div>
             </div>
-            <ol id="plan-list" class="plan-list"></ol>
             <button id="start-button" class="primary-button" type="button">
-                <span>开始今天的训练</span><span aria-hidden="true">→</span>
+                <span>开始今日康复</span><span aria-hidden="true">→</span>
             </button>
-            <p id="last-session-note" class="last-session-note">第一次训练会从基础剂量开始。</p>
+            <div id="plan-list"></div>
+            <p id="last-session-note" class="last-session-note"></p>
         </section>
 
-        <section class="how-it-works" aria-labelledby="adjust-title">
-            <div class="section-heading">
-                <p class="section-kicker">AUTO ADJUST</p>
-                <h2 id="adjust-title">慢一点，稳一点</h2>
-            </div>
-            <div class="rule-grid">
-                <article><span>3</span><p>连续 3 次“没问题”，下次升一级</p></article>
-                <article><span>1</span><p>单次“不舒服”，下次维持当前等级</p></article>
-                <article><span>2</span><p>连续 2 次“不舒服”，下次降一级</p></article>
-            </div>
+        <section class="today-card experiment-card" aria-labelledby="experiment-title">
+            <h2 id="experiment-title">肱二头肌增肌实验</h2>
+            <p id="measurement-note" class="last-session-note"></p>
+            <form id="measurement-form" class="measurement-form">
+                <label>左上臂（cm）<input name="left" type="number" min="1" max="150" step="0.1" required inputmode="decimal"></label>
+                <label>右上臂（cm）<input name="right" type="number" min="1" max="150" step="0.1" required inputmode="decimal"></label>
+                <button class="secondary-button" type="submit">保存围度</button>
+            </form>
+            <details class="experiment-trend">
+                <summary>最近 12 周的训练与围度</summary>
+                <div id="experiment-content"></div>
+            </details>
         </section>
     </section>
 
     <section id="workout-view" class="view workout-view" aria-labelledby="exercise-name" hidden>
         <div class="workout-topline">
             <button id="exit-workout" class="text-button" type="button">结束训练</button>
-            <div class="workout-progress-label"><span id="exercise-position">1 / 5</span> 个动作</div>
+            <div class="workout-progress-label"><span id="exercise-position"></span> 个动作</div>
+            <button id="report-symptom" class="danger-button" type="button">不适，停止动作</button>
         </div>
         <div class="progress-track" aria-hidden="true"><span id="workout-progress"></span></div>
 
         <div class="workout-stage">
             <div class="step-meta">
                 <span id="phase-badge" class="phase-badge">准备</span>
-                <span id="round-label">第 1 组 / 共 5 组</span>
+                <span id="round-label"></span>
             </div>
             <p id="exercise-purpose" class="exercise-purpose"></p>
-            <h1 id="exercise-name">Bird-Dog</h1>
-            <p id="step-instruction" class="step-instruction" aria-live="polite">左臂向前，右腿向后</p>
+            <h1 id="exercise-name"></h1>
+            <p id="step-instruction" class="step-instruction" aria-live="polite"></p>
 
             <div id="timer-ring" class="timer-wrap" aria-label="当前步骤剩余时间">
                 <div class="timer-ring" aria-hidden="true"></div>
                 <div class="timer-value"><strong id="countdown">10</strong><span>秒</span></div>
             </div>
 
-            <p id="next-cue" class="next-cue">接下来：换边</p>
-            <div class="form-cue"><span aria-hidden="true">◎</span><p id="form-cue-text">向外延伸，不追求抬高；保持骨盆稳定并正常呼吸。</p></div>
+            <p id="next-cue" class="next-cue"></p>
+            <div class="form-cue"><span aria-hidden="true">◎</span><p id="form-cue-text"></p></div>
         </div>
 
         <div class="workout-controls">
@@ -95,31 +101,42 @@
                 <span class="control-button__icon" aria-hidden="true">⇥</span><span>跳过动作</span>
             </button>
         </div>
+        <div class="workout-actions">
+            <button id="complete-exercise" class="secondary-button" type="button">已完成动作</button>
+        </div>
     </section>
 
     <section id="feedback-view" class="view feedback-view" aria-labelledby="feedback-title" hidden>
-        <div class="completion-mark" aria-hidden="true">✓</div>
-        <p id="feedback-progress" class="eyebrow">EXERCISE 1 OF 5</p>
-        <h1 id="feedback-title">这个动作<br>感觉怎么样？</h1>
-        <p id="feedback-exercise" class="feedback-exercise">Bird-Dog · 鸟狗式</p>
-        <p class="feedback-intro">只需点一次。反馈会立即保存，并用于调整这个动作下次的等级。</p>
+        <p id="feedback-progress" class="eyebrow"></p>
+        <h1 id="feedback-title">这个动作感觉怎么样？</h1>
+        <p id="feedback-exercise" class="feedback-exercise"></p>
+        <p id="feedback-intro" class="feedback-intro">选择本次感受。训练当天或次日如有症状加重，可在首页报告。</p>
 
         <form id="feedback-form">
-            <div class="binary-feedback" role="group" aria-label="动作反馈">
-                <button class="feedback-button feedback-button--good" type="submit" name="feedback" value="good">
-                    <span class="feedback-button__mark" aria-hidden="true">✓</span>
-                    <span><strong>没问题</strong><small>可以按这个剂量继续</small></span>
+            <div id="feedback-choices" class="feedback-options" role="group" aria-label="动作反馈">
+                <button class="feedback-button feedback-button--good" type="submit" name="feedback" value="+">
+                    <span class="feedback-button__mark" aria-hidden="true">+</span>
+                    <span><strong>轻松</strong><small>动作标准，轻松完成，且没有不适</small></span>
                 </button>
-                <button class="feedback-button feedback-button--bad" type="submit" name="feedback" value="bad">
-                    <span class="feedback-button__mark" aria-hidden="true">×</span>
-                    <span><strong>不舒服</strong><small>这次体验不太好</small></span>
+                <button class="feedback-button" type="submit" name="feedback" value="0">
+                    <span class="feedback-button__mark" aria-hidden="true">0</span>
+                    <span><strong>合适</strong><small>剂量合适，且没有不适</small></span>
+                </button>
+                <button id="negative-feedback" class="feedback-button feedback-button--bad" type="button">
+                    <span class="feedback-button__mark" aria-hidden="true">−</span>
+                    <span><strong>困难或不适</strong><small>选择原因以调整训练</small></span>
                 </button>
             </div>
+            <div id="feedback-reasons" class="feedback-options" role="group" aria-label="困难或不适的原因" hidden>
+                <button class="secondary-button" type="submit" name="feedback" value="difficulty">太难或控制不佳，且没有不适</button>
+                <button class="danger-button" type="submit" name="feedback" value="symptoms">有疼痛、熟悉的不适、麻木或无力</button>
+                <button id="feedback-back" class="secondary-button" type="button">返回反馈选项</button>
+            </div>
         </form>
+        <button id="cancel-feedback" class="text-button" type="button" hidden>取消</button>
     </section>
 
     <section id="summary-view" class="view summary-view" aria-labelledby="summary-title" hidden>
-        <p class="eyebrow">NEXT SESSION</p>
         <h1 id="summary-title">已记录。<br>下次继续。</h1>
         <p id="summary-copy" class="summary-copy"></p>
         <div id="adjustment-list" class="adjustment-list"></div>
@@ -129,7 +146,7 @@
 
 <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-title">
     <div class="dialog-header">
-        <div><p class="section-kicker">LOCAL HISTORY</p><h2 id="history-title">训练记录</h2></div>
+        <h2 id="history-title">训练记录</h2>
         <button id="close-history" class="dialog-close" type="button" aria-label="关闭训练记录">×</button>
     </div>
     <div id="history-content" class="history-content"></div>
@@ -141,7 +158,7 @@
 
 <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title">
     <h2 id="confirm-title">要结束今天的训练吗？</h2>
-    <p>本次进度不会保存，之后可以重新开始。</p>
+    <p>已经提交的反馈会保留。</p>
     <div>
         <button id="confirm-cancel" class="secondary-button" type="button">继续训练</button>
         <button id="confirm-exit" class="danger-button" type="button">结束训练</button>
@@ -150,7 +167,7 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <div data-shared-footer></div>
-<script src="/static/exercises/app.js?v=20260808103721" type="module"></script>
+<script src="/static/exercises/app.js?v=3" type="module"></script>
 <script src="/static/common/footer.js" type="module"></script>
 </body>
 </html>

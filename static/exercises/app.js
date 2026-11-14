@@ -1,276 +1,13 @@
-const STORAGE_KEY = "fengdock.exercises.v1";
-const STORAGE_VERSION = 2;
+import { EXERCISES, GROUPS } from "./config.mjs";
+import { buildSteps } from "./guide.mjs";
+import {
+  STORAGE_KEY, FEEDBACK_LABELS, migrateStore, addDays, dayKey, schedule, saveTraining,
+  latestFeedback, recoveryAvailable, confirmRecovery, undoFeedback, resumeExercise, updateResistance,
+  confirmedStreak, canReportWorse, canReplaceFeedback, replaceFeedback,
+} from "./training.mjs";
+
 const AUDIO_BASE_URL = "/static/exercises/audio";
 const AUDIO_MANIFEST_URL = `${AUDIO_BASE_URL}/manifest.json`;
-
-const EXERCISES = [
-  {
-    id: "cat_cow",
-    name: "Cat-Cow",
-    chineseName: "猫牛式",
-    purpose: "温和活动脊柱 · 不做力量进阶",
-    cue: "猫式时拱背，牛式时塌腰并抬起胸口；只在舒适范围内缓慢活动，不强迫做到最大屈曲或伸展。",
-    fixedDose: { level: 1, reps: 10, secondsPerRep: 12 },
-    automaticProgression: false,
-    buildSteps(dose) {
-      const catPhaseDuration = Math.ceil(dose.secondsPerRep / 2);
-      const cowPhaseDuration = dose.secondsPerRep - catPhaseDuration;
-      const steps = [prepareStep(
-        "cat_cow_prepare",
-        "Cat cow. Come onto your hands and knees. Work slowly, and stay within a comfortable range.",
-      )];
-      for (let rep = 1; rep <= dose.reps; rep += 1) {
-        steps.push({
-          phase: "work",
-          duration: catPhaseDuration,
-          instruction: "猫式：缓慢拱背",
-          audioCue: "cat_cow_cat",
-          prompt: "Cat. Slowly round your back.",
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 猫式拱背`,
-          next: "接下来：牛式塌腰并抬胸",
-          countDown: true,
-        });
-        steps.push({
-          phase: "work",
-          duration: cowPhaseDuration,
-          instruction: "牛式：缓慢塌腰并抬起胸口",
-          audioCue: "cat_cow_arch",
-          prompt: "Cow. Gently arch your back and lift your chest.",
-          roundLabel: `第 ${rep} 次 / 共 ${dose.reps} 次 · 牛式塌腰`,
-          next: rep === dose.reps ? "接下来：动作完成" : `接下来：第 ${rep + 1} 次猫式拱背`,
-          countDown: true,
-        });
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `${dose.reps} 次 · 每次约 ${dose.secondsPerRep} 秒`;
-    },
-  },
-  {
-    id: "high_incline_push_up",
-    name: "High Incline Push-Up",
-    chineseName: "高位斜板俯卧撑",
-    purpose: "胸肌与肱三头肌力量 · 上肢线条",
-    cue: "使用稳定厨房台面；双手约肩宽，脚距台面约 80 厘米；头、肩、髋、脚跟近似一线，腹部轻收并夹紧臀部；肘部与躯干约 30–45°。腰、肩或手腕不适请选“不舒服”。",
-    levels: [
-      { level: 1, sets: 2, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 3 },
-      { level: 2, sets: 2, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 3 },
-      { level: 3, sets: 2, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 3 },
-      { level: 4, sets: 3, repsPerSet: 8, restSeconds: 22.5, secondsPerRep: 3 },
-      { level: 5, sets: 3, repsPerSet: 10, restSeconds: 22.5, secondsPerRep: 3 },
-      { level: 6, sets: 3, repsPerSet: 12, restSeconds: 22.5, secondsPerRep: 3 },
-    ],
-    maxAutoLevel: 6,
-    manualReviewAtMax: true,
-    buildSteps(dose) {
-      const steps = [prepareStep(
-        "high_incline_prepare",
-        "High incline push-up. Use a stable kitchen counter about ten centimeters below navel height. Place your hands about shoulder-width apart, and start with your feet about eighty centimeters from the counter. Keep your body in one straight line, lightly brace your core, and squeeze your glutes.",
-        20,
-      )];
-      for (let set = 1; set <= dose.sets; set += 1) {
-        for (let rep = 1; rep <= dose.repsPerSet; rep += 1) {
-          const firstRep = rep === 1;
-          const lastRep = rep === dose.repsPerSet;
-          const lastSet = set === dose.sets;
-          steps.push({
-            phase: "work",
-            duration: dose.secondsPerRep,
-            instruction: "胸部靠近台面，再受控推回",
-            audioCue: firstRep ? `high_incline_set_${set}_start` : `high_incline_rep_${rep}`,
-            prompt: firstRep
-              ? `Set ${set}. Begin.`
-              : `Rep ${rep}. Lower slowly, then press up.`,
-            roundLabel: `第 ${set} 组 · 第 ${rep} 次 / 共 ${dose.repsPerSet} 次`,
-            next: lastRep
-              ? (lastSet ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`)
-              : `接下来：第 ${rep + 1} 次`,
-            countDown: false,
-          });
-        }
-        if (set < dose.sets) {
-          steps.push(restStep(
-            dose.restSeconds,
-            `high_incline_rest_${set + 1}`,
-            `Set ${set} complete. Rest for twenty-two and a half seconds. Set ${set + 1} is next.`,
-            `第 ${set} 组完成 / 共 ${dose.sets} 组`,
-          ));
-        }
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `${dose.sets} 组 · 每组 ${dose.repsPerSet} 次 · 休息 ${dose.restSeconds} 秒`;
-    },
-  },
-  {
-    id: "bird_dog",
-    name: "Bird-Dog",
-    chineseName: "鸟狗式",
-    purpose: "骨盆与腰椎稳定 · 抗旋转控制",
-    cue: "向外延伸，不追求抬高；保持骨盆稳定，不塌腰，正常呼吸。",
-    levels: [
-      { level: 1, holdSeconds: 10, repsPerSide: 5 },
-      { level: 2, holdSeconds: 10, repsPerSide: 6 },
-      { level: 3, holdSeconds: 10, repsPerSide: 7 },
-      { level: 4, holdSeconds: 10, repsPerSide: 8 },
-    ],
-    maxAutoLevel: 4,
-    buildSteps(dose) {
-      const steps = [prepareStep(
-        "bird_dog_prepare",
-        "Bird dog. Come onto your hands and knees, find a steady position, and get ready.",
-      )];
-      const totalHolds = dose.repsPerSide * 2;
-      let holdIndex = 0;
-      for (let round = 1; round <= dose.repsPerSide; round += 1) {
-        holdIndex += 1;
-        steps.push({
-          phase: "work",
-          duration: dose.holdSeconds,
-          instruction: "左臂向前，右腿向后",
-          audioCue: round === 1 ? "bird_dog_left_first" : "bird_dog_left",
-          prompt: round === 1
-            ? "Begin. Reach your left arm forward and your right leg back. Keep your pelvis steady and breathe."
-            : "Left arm forward, right leg back. Stay steady and breathe.",
-          roundLabel: `第 ${round} 轮 / 共 ${dose.repsPerSide} 轮`,
-          next: "接下来：换边",
-          countDown: true,
-        });
-        if (holdIndex < totalHolds) {
-          steps.push(switchStep("switch_sides", "Switch sides and get into position."));
-        }
-
-        holdIndex += 1;
-        steps.push({
-          phase: "work",
-          duration: dose.holdSeconds,
-          instruction: "右臂向前，左腿向后",
-          audioCue: "bird_dog_right",
-          prompt: "Right arm forward, left leg back. Stay steady and breathe.",
-          roundLabel: `第 ${round} 轮 / 共 ${dose.repsPerSide} 轮`,
-          next: round === dose.repsPerSide ? "接下来：动作完成" : "接下来：换边",
-          countDown: true,
-        });
-        if (holdIndex < totalHolds) {
-          steps.push(switchStep("switch_sides", "Switch sides and get into position."));
-        }
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `每侧 ${dose.repsPerSide} 次 · 每次 ${dose.holdSeconds} 秒`;
-    },
-  },
-  {
-    id: "static_plank",
-    name: "Static Plank",
-    chineseName: "平板支撑",
-    purpose: "躯干前侧耐力 · 抗伸展控制",
-    cue: "头、躯干和骨盆大致一线；不塌腰、不抬高臀部，正常呼吸。",
-    levels: [
-      { level: 1, holdSeconds: 30, sets: 3, restSeconds: 22.5 },
-      { level: 2, holdSeconds: 35, sets: 3, restSeconds: 22.5 },
-      { level: 3, holdSeconds: 40, sets: 3, restSeconds: 22.5 },
-      { level: 4, holdSeconds: 45, sets: 3, restSeconds: 22.5 },
-    ],
-    maxAutoLevel: 4,
-    buildSteps(dose) {
-      const steps = [prepareStep("static_plank_prepare", "Static plank. Find a stable position and get ready.")];
-      for (let set = 1; set <= dose.sets; set += 1) {
-        steps.push({
-          phase: "work",
-          duration: dose.holdSeconds,
-          instruction: "收紧躯干，保持身体一线",
-          audioCue: set === 1 ? "static_plank_start" : `static_plank_set_${set}`,
-          prompt: set === 1
-            ? "Begin the plank. Brace gently, keep your body in one long line, and keep breathing."
-            : `Set ${set}. Begin, and keep breathing.`,
-          roundLabel: `第 ${set} 组 / 共 ${dose.sets} 组`,
-          next: set === dose.sets ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`,
-          countDown: true,
-        });
-        if (set < dose.sets) {
-          steps.push(restStep(
-            dose.restSeconds,
-            `static_plank_rest_${set + 1}`,
-            `Rest. Breathe normally. Set ${set + 1} is next.`,
-            `第 ${set} 组完成 / 共 ${dose.sets} 组`,
-          ));
-        }
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `${dose.sets} 组 · 每组 ${dose.holdSeconds} 秒 · 休息 ${dose.restSeconds} 秒`;
-    },
-  },
-  {
-    id: "side_plank",
-    name: "Side Plank",
-    chineseName: "侧平板支撑",
-    purpose: "躯干侧向稳定 · 抗侧屈控制",
-    cue: "肩、骨盆和腿大致一线；骨盆不要下沉，身体不要前后旋转。",
-    levels: [
-      { level: 1, holdSeconds: 20, setsPerSide: 2, restSeconds: 15 },
-      { level: 2, holdSeconds: 25, setsPerSide: 2, restSeconds: 15 },
-      { level: 3, holdSeconds: 30, setsPerSide: 2, restSeconds: 15 },
-      { level: 4, holdSeconds: 35, setsPerSide: 2, restSeconds: 15 },
-    ],
-    maxAutoLevel: 4,
-    buildSteps(dose) {
-      const steps = [prepareStep("side_plank_prepare", "Side plank. Find a stable position and get ready.")];
-      const total = dose.setsPerSide * 2;
-      let current = 0;
-      for (let set = 1; set <= dose.setsPerSide; set += 1) {
-        current += 1;
-        steps.push({
-          phase: "work",
-          duration: dose.holdSeconds,
-          instruction: "左侧支撑，抬起骨盆",
-          audioCue: "side_plank_left",
-          prompt: "Begin on your left side. Lift your hips, keep your body long, and breathe.",
-          roundLabel: `第 ${set} 轮左侧 / 共 ${dose.setsPerSide} 轮`,
-          next: `接下来：休息 ${dose.restSeconds} 秒后换边`,
-          countDown: true,
-        });
-        steps.push(restStep(
-          dose.restSeconds,
-          "side_plank_rest_right",
-          "Rest and breathe. Your right side is next.",
-          `已完成 ${current} / ${total} 组`,
-        ));
-
-        current += 1;
-        steps.push({
-          phase: "work",
-          duration: dose.holdSeconds,
-          instruction: "右侧支撑，抬起骨盆",
-          audioCue: "side_plank_right",
-          prompt: "Begin on your right side. Lift your hips, keep your body long, and breathe.",
-          roundLabel: `第 ${set} 轮右侧 / 共 ${dose.setsPerSide} 轮`,
-          next: current === total ? "接下来：动作完成" : `接下来：休息 ${dose.restSeconds} 秒`,
-          countDown: true,
-        });
-        if (current < total) {
-          steps.push(restStep(
-            dose.restSeconds,
-            "side_plank_rest_left",
-            "Rest and breathe. Your left side is next.",
-            `已完成 ${current} / ${total} 组`,
-          ));
-        }
-      }
-      return steps;
-    },
-    doseLabel(dose) {
-      return `每侧 ${dose.setsPerSide} 组 · 每组 ${dose.holdSeconds} 秒 · 休息 ${dose.restSeconds} 秒`;
-    },
-  },
-];
-
-const FEEDBACK_LABELS = { good: "没问题", bad: "不舒服" };
 
 const views = {
   home: document.getElementById("home-view"),
@@ -317,9 +54,18 @@ const elements = {
   confirmCancel: document.getElementById("confirm-cancel"),
   confirmExit: document.getElementById("confirm-exit"),
   toast: document.getElementById("toast"),
+  recoveryPanel: document.getElementById("recovery-panel"),
+  recoveryList: document.getElementById("recovery-list"),
+  feedbackChoices: document.getElementById("feedback-choices"),
+  feedbackReasons: document.getElementById("feedback-reasons"),
+  feedbackIntro: document.getElementById("feedback-intro"),
+  cancelFeedback: document.getElementById("cancel-feedback"),
+  measurementForm: document.getElementById("measurement-form"),
+  measurementNote: document.getElementById("measurement-note"),
+  experimentContent: document.getElementById("experiment-content"),
 };
 
-let store = loadStore();
+let store = migrateStore();
 let workout = null;
 let timerId = null;
 let wakeLock = null;
@@ -330,203 +76,305 @@ const countdownAudio = new Audio();
 countdownAudio.preload = "auto";
 const audioCache = new Map();
 
-const audioManifestPromise = loadAudioManifest();
-
-function prepareStep(audioCue, prompt, duration = 7) {
-  return {
-    phase: "prepare",
-    duration,
-    instruction: "找到稳定位置，准备开始",
-    audioCue,
-    prompt,
-    roundLabel: "准备姿势",
-    next: "接下来：开始动作",
-    countDown: false,
-  };
-}
-
-function switchStep(audioCue, prompt) {
-  return {
-    phase: "switch",
-    duration: 4,
-    instruction: "换边",
-    audioCue,
-    prompt,
-    roundLabel: "调整姿势",
-    next: "接下来：保持",
-    countDown: false,
-  };
-}
-
-function restStep(duration, audioCue, prompt, roundLabel) {
-  return {
-    phase: "rest",
-    duration,
-    instruction: "休息并正常呼吸",
-    audioCue,
-    prompt,
-    roundLabel,
-    next: "接下来：下一组",
-    countDown: duration >= 10,
-  };
-}
-
-function defaultStore() {
-  return {
-    version: STORAGE_VERSION,
-    voiceEnabled: true,
-    levels: Object.fromEntries(EXERCISES.map((exercise) => [exercise.id, 1])),
-    manualReviews: {},
-    sessions: [],
-  };
-}
-
 function loadStore() {
-  const fallback = defaultStore();
+  return migrateStore(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") ?? {});
+}
+
+async function updateStore(update) {
+  const commit = () => {
+    const next = loadStore();
+    const result = update(next, new Date());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    store = next;
+    return result;
+  };
+  if (navigator.locks) return navigator.locks.request(STORAGE_KEY, commit);
+  return commit();
+}
+
+function displayError(error) {
+  const message = error instanceof DOMException ? "浏览器无法保存训练记录，请检查存储空间或隐私设置。" : error.message;
+  showToast(message);
+}
+
+function node(tag, className, label) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (label) element.textContent = label;
+  return element;
+}
+
+function button(label, action, className = "secondary-button") {
+  const element = node("button", className, label);
+  element.type = "button";
+  element.addEventListener("click", action);
+  return element;
+}
+
+async function act(update) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!parsed) return fallback;
-    const sessions = Array.isArray(parsed.sessions)
-      ? parsed.sessions.map((session) => ({
-          id: session.id,
-          timestamp: session.timestamp || session.startedAt,
-          startedAt: session.startedAt || session.timestamp,
-          completedAt: session.completedAt || null,
-          status: session.status || ((session.records || []).length >= EXERCISES.length ? "completed" : "partial"),
-          records: (session.records || []).map((record) => ({
-            timestamp: record.timestamp || session.timestamp,
-            exercise_id: record.exercise_id,
-            level: record.level,
-            prescribed_dose: record.prescribed_dose,
-            completed: Boolean(record.completed),
-            feedback: record.feedback === "good" || record.feedback === "bad" ? record.feedback : null,
-            legacy: Boolean(record.legacy || (parsed.version !== STORAGE_VERSION && !record.feedback)),
-          })),
-        }))
-      : [];
-    return {
-      ...fallback,
-      voiceEnabled: parsed.voiceEnabled !== false,
-      levels: { ...fallback.levels, ...(parsed.levels || {}) },
-      manualReviews: { ...fallback.manualReviews, ...(parsed.manualReviews || {}) },
-      sessions,
-    };
-  } catch (_error) {
-    return fallback;
+    const change = await updateStore(update);
+    renderHome();
+    if (elements.historyDialog.open) renderHistory();
+    if (typeof change === "string") showToast(change);
+    else if (change?.type) showToast(changeLabel(change));
+  } catch (error) {
+    displayError(error);
   }
 }
 
-function saveStore() {
+function doseLabel(exercise, dose) {
+  if (dose.reps == null) {
+    return [
+      dose.sets && `${dose.sets} 组`,
+      dose.setsPerSide && `每侧 ${dose.setsPerSide} 组`,
+      dose.repsPerSet && `每组 ${dose.repsPerSet} 次`,
+      dose.repsPerSide && `每侧 ${dose.repsPerSide} 次`,
+      dose.holdSeconds && `保持 ${dose.holdSeconds} 秒`,
+      dose.secondsPerRep && `每次 ${dose.secondsPerRep} 秒`,
+      dose.restSeconds && `休息 ${dose.restSeconds} 秒`,
+    ].filter(Boolean).join(" · ");
+  }
+  if (!dose.tempoSeconds && dose.secondsPerRep) return `${dose.reps} 次 · 每次 ${dose.secondsPerRep} 秒`;
+  const scope = exercise?.id === "shoulder_rolls" ? "前后各 " : exercise?.sides ? "每侧 " : "";
+  return [
+    `${scope}${dose.sets} 组 × ${dose.reps} 次`,
+    dose.holdSeconds && `保持 ${dose.holdSeconds} 秒`,
+    dose.tempoSeconds && `节奏 ${dose.tempoSeconds} 秒`,
+    dose.resistanceLevel && `阻力 R${dose.resistanceLevel}`,
+    dose.weeklySets && !dose.trial && `每周 ${dose.daysPerWeek} 天 / 每侧 ${dose.weeklySets} 组`,
+  ].filter(Boolean).join(" · ");
+}
+
+const PARAMETER_LABELS = {
+  reps: "次数", holdSeconds: "保持时间", sets: "每次组数", weeklySets: "每周组数",
+  daysPerWeek: "每周训练天数", tempoSeconds: "每次秒数", resistanceLevel: "阻力等级", resistanceNote: "弹力带",
+};
+
+function changeLabel(change) {
+  if (change.type === "paused") return "因不适暂停，请评估后再恢复动作";
+  if (change.type === "resumed") return "已恢复计划";
+  if (change.type === "resistanceReady") return "当前阻力下已达到计划训练量，可以确认更高阻力";
+  if (change.type === "maintenance") return "已进入维护";
+  if (change.type === "undo") return "已撤销反馈及由此产生的调整";
+  const values = change.fields.filter((field) => field !== "resistanceNote").map((field) =>
+    `${PARAMETER_LABELS[field]} ${change.before[field]} → ${change.after[field]}`,
+  );
+  return `L${change.after.level} · ${values.join(" · ")}`;
+}
+
+function planItem(exercise, now) {
+  const entry = schedule(store, exercise, now);
+  const steps = entry.due ? buildSteps(exercise, entry.dose) : [];
+  return { exercise, ...entry, steps, durationSeconds: steps.reduce((sum, step) => sum + step.duration, 0) };
+}
+
+function refreshStore() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch (_error) {
-    showToast("浏览器无法保存记录，请检查隐私设置");
+    store = loadStore();
+    return true;
+  } catch (error) {
+    displayError(error);
+    return false;
   }
 }
 
-function getPrescription(exercise) {
-  if (exercise.fixedDose) return { ...exercise.fixedDose };
-  const requestedLevel = Number(store.levels[exercise.id] || 1);
-  const index = Math.min(Math.max(requestedLevel, 1), exercise.levels.length) - 1;
-  return { ...exercise.levels[index] };
+function startPlan(exerciseId, manual = false) {
+  if (workout || !refreshStore()) return;
+  const now = new Date();
+  const plan = EXERCISES.filter((exercise) => exerciseId ? exercise.id === exerciseId : !exercise.trial)
+    .map((exercise) => planItem(exercise, now)).filter((item) => item.due);
+  if (!plan.length) {
+    renderHome();
+    return;
+  }
+  startWorkout(plan, manual);
 }
 
-function buildPlan() {
-  return EXERCISES.map((exercise) => {
-    const dose = getPrescription(exercise);
-    const steps = exercise.buildSteps(dose);
-    return {
-      exercise,
-      dose,
-      steps,
-      durationSeconds: steps.reduce((total, step) => total + step.duration, 0),
-    };
+function renderRecovery(now) {
+  const pending = EXERCISES.flatMap((exercise) => {
+    const record = latestFeedback(store, exercise.id);
+    if (store.exercises[exercise.id].status === "paused" || !record?.attempted
+        || record.recovery || record.reason === "symptoms" || !recoveryAvailable(record, now)) return [];
+    return [{ exercise, record }];
   });
+  const rows = pending.map(({ exercise, record }) => {
+    const row = node("div", "recovery-row");
+    row.append(node("strong", "", exercise.chineseName));
+    const actions = node("div", "inline-actions");
+    actions.append(
+      button("无加重", () => act((next, time) => confirmRecovery(next, exercise.id, record.id, "ok", time))),
+      button("有加重", () => act((next, time) => confirmRecovery(next, exercise.id, record.id, "worse", time)), "danger-button"),
+    );
+    row.append(actions);
+    return row;
+  });
+  if (pending.length > 1) {
+    rows.push(button("以上动作均无加重", () => act((next, time) => {
+      for (const { exercise, record } of pending) confirmRecovery(next, exercise.id, record.id, "ok", time);
+      return "恢复确认已记录";
+    }), "secondary-button recovery-batch"));
+  }
+  elements.recoveryList.replaceChildren(...rows);
+  elements.recoveryPanel.hidden = rows.length === 0;
+}
+
+function renderResistance(state, actions) {
+  if (!state.resistanceReady) return;
+  actions.append(button("确认更高阻力", () => {
+    const input = window.prompt("已换用更高阻力时，请填写可复现的设置，例如弹力带型号、颜色或握距。");
+    if (input?.trim()) act((next, time) => updateResistance(next, input.trim().slice(0, 120), time));
+  }));
+  if (!state.resistanceUnavailable) {
+    actions.append(button("暂无更高阻力", () => act((next, time) => updateResistance(next, null, time))));
+  }
+}
+
+function exerciseRow(item, now) {
+  const { exercise, dose, next, waitingForTrial, due } = item;
+  const state = store.exercises[exercise.id];
+  const row = node("li", "plan-item");
+  row.dataset.exercise = exercise.id;
+  const title = node("div", "plan-item__title");
+  const name = node("strong", "plan-item__name", exercise.name);
+  const level = node("span", "level-chip", `L${state.level}`);
+  title.append(name, level);
+  row.append(title, node("span", "plan-item__dose", exercise.chineseName));
+  const formalDose = dose.trial ? { ...state, trial: false } : dose;
+  row.append(node("span", "plan-item__target", `${dose.trial ? "正式计划 · " : ""}${doseLabel(exercise, formalDose)}`));
+  const status = [];
+  const record = latestFeedback(store, exercise.id);
+  if (state.status === "paused") status.push("已暂停 · 请评估相关不适");
+  else if (state.status === "maintenance") status.push("维护");
+  if (state.resistanceReady) status.push("可确认更高的弹力带阻力");
+  if (exercise.trial && state.status !== "paused") {
+    if (waitingForTrial) status.push("确认试做后的恢复，方可开始正式训练");
+    else if (due) status.push(dose.trial ? `首次耐受试做 · 每侧 ${dose.sets} 组 × ${dose.reps} 次` : "今天安排弯举");
+    else status.push(`下次 ${formatScheduleDate(next)}`);
+    if (state.resistanceNote) status.push(state.resistanceNote);
+  } else if (!due && state.status !== "paused") {
+    status.push(state.daysPerWeek < 7 ? `下次 ${formatScheduleDate(next)}` : "今天已记录");
+  }
+  if (state.status !== "paused" && (state.status !== "maintenance" || exercise.trial)) {
+    const goal = GROUPS[exercise.group].positiveTarget;
+    status.push(`连续 + ${state.positiveStreak} 次 · 已确认 ${Math.min(confirmedStreak(store, exercise.id, true), goal)} / ${goal}`);
+  }
+  if (record?.attempted && !record.recovery && record.reason !== "symptoms" && state.status !== "paused") {
+    status.push("待确认恢复");
+  }
+  row.append(node("span", "plan-item__dose", status.join(" · ")));
+  if (state.lastChange) {
+    row.append(node("span", "plan-item__dose", `最近调整 · ${changeLabel(state.lastChange)}`));
+  }
+  const actions = node("div", "inline-actions");
+  if (due) {
+    actions.append(button(dose.trial ? "开始试做" : "开始引导", () => startPlan(exercise.id)));
+    actions.append(button(dose.trial ? "试做已完成" : "已完成", () => startPlan(exercise.id, true)));
+  }
+  if (state.status === "paused") {
+    actions.append(button("评估后恢复", () => {
+      if (window.confirm("确认已评估相关不适，并适合恢复这个动作？")) {
+        act((nextStore, time) => resumeExercise(nextStore, exercise.id, time));
+      }
+    }));
+  } else {
+    if (canReportWorse(store, exercise.id, record, now) && (record.recovery || !recoveryAvailable(record, now))) {
+      actions.append(button("报告症状加重", () => {
+        act((nextStore, time) => confirmRecovery(nextStore, exercise.id, record.id, "worse", time));
+      }, "danger-button"));
+    }
+    if (exercise.trial) renderResistance(state, actions);
+  }
+  if (actions.childElementCount) row.append(actions);
+  return row;
 }
 
 function renderHome() {
-  const plan = buildPlan();
-  const today = new Intl.DateTimeFormat("zh-CN", {
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-  }).format(new Date());
-  elements.todayLabel.textContent = today;
-  elements.planDuration.textContent = String(Math.ceil(plan.reduce((sum, item) => sum + item.durationSeconds, 0) / 60));
-  elements.planList.replaceChildren(
-    ...plan.map(({ exercise, dose }, index) => {
-      const item = document.createElement("li");
-      item.className = "plan-item";
-
-      const number = document.createElement("span");
-      number.className = "plan-item__number";
-      number.textContent = String(index + 1).padStart(2, "0");
-
-      const copy = document.createElement("div");
-      const name = document.createElement("span");
-      name.className = "plan-item__name";
-      name.textContent = `${exercise.name} · ${exercise.chineseName}`;
-      const doseText = document.createElement("span");
-      doseText.className = "plan-item__dose";
-      doseText.textContent = exercise.doseLabel(dose);
-      copy.append(name, doseText);
-
-      const level = document.createElement("span");
-      level.className = "level-chip";
-      if (store.manualReviews[exercise.id]) {
-        level.textContent = "需评估";
-        level.dataset.review = "true";
-      } else if (exercise.automaticProgression === false) {
-        level.textContent = "固定";
-      } else {
-        level.textContent = `LV.${dose.level}`;
-      }
-
-      item.append(number, copy, level);
-      return item;
-    }),
-  );
-
-  const latest = store.sessions[0];
-  if (latest) {
-    const date = formatSessionDate(latest.timestamp);
-    const completedRecords = (latest.records || []).filter((record) => record.completed && record.feedback);
-    const goodCount = completedRecords.filter((record) => record.feedback === "good").length;
-    const badCount = completedRecords.filter((record) => record.feedback === "bad").length;
-    elements.lastSessionNote.textContent = `上次训练：${date} · ${goodCount} 个没问题${badCount ? ` · ${badCount} 个不舒服` : ""}`;
-  } else {
-    elements.lastSessionNote.textContent = "第一次训练会从基础剂量开始。记录只保存在这台设备。";
-  }
+  const now = new Date();
+  const plan = EXERCISES.map((exercise) => planItem(exercise, now));
+  const rehab = plan.filter((item) => !item.exercise.trial && item.due);
+  elements.todayLabel.textContent = new Intl.DateTimeFormat("zh-CN", {
+    month: "long", day: "numeric", weekday: "long",
+  }).format(now);
+  elements.planDuration.textContent = String(Math.ceil(rehab.reduce((sum, item) => sum + item.durationSeconds, 0) / 60));
+  elements.startButton.disabled = !rehab.length;
+  elements.startButton.firstElementChild.textContent = rehab.length ? "开始今日康复" : "今天的康复计划已结束";
+  elements.planList.replaceChildren(...Object.entries(GROUPS).map(([id, group]) => {
+    const section = node("section", "plan-group");
+    section.append(node("h3", "", group.name));
+    const list = node("ul", "plan-list");
+    list.append(...plan.filter((item) => item.exercise.group === id).map((item) => exerciseRow(item, now)));
+    section.append(list);
+    return section;
+  }));
+  elements.lastSessionNote.textContent = "可以按需跳过动作。康复进阶以完成质量和恢复确认计算。";
+  renderRecovery(now);
+  renderExperiment(now);
   updateVoiceButton();
 }
 
-function startWorkout() {
-  const plan = buildPlan();
+function renderExperiment(now) {
+  const last = store.measurements[0];
+  const next = last && addDays(last.timestamp, 14);
+  elements.measurementNote.textContent = !last || dayKey(now) >= dayKey(next)
+    ? "可以记录左右上臂围度。建议每两周在相同条件下测量一次。"
+    : `下次围度记录 · ${formatSessionDate(next)}`;
+  const start = addDays(now, -83);
+  start.setHours(0, 0, 0, 0);
+  const records = store.sessions.flatMap((session) => session.records ?? []).filter((record) =>
+    record.exercise_id === "band_curl" && record.completed && !record.prescribed_dose.trial && new Date(record.timestamp) >= start,
+  ).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const rows = Array.from({ length: 12 }, (_, index) => {
+    const from = addDays(start, (11 - index) * 7);
+    const until = addDays(from, 7);
+    const inWeek = (entry) => new Date(entry.timestamp) >= from && new Date(entry.timestamp) < until;
+    const training = records.filter(inWeek);
+    const measurements = store.measurements.filter(inWeek);
+    if (!training.length && !measurements.length) return null;
+    const row = node("tr");
+    const week = node("th", "", new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(from));
+    week.scope = "row";
+    row.append(week);
+    const performance = node("td");
+    for (const { prescribed_dose: dose, timestamp } of training) {
+      performance.append(node("span", "", `${formatSessionDate(timestamp)} · R${dose.resistanceLevel} · ${dose.sets}×${dose.reps} / 侧 · ${dose.tempoSeconds} 秒/次`));
+    }
+    const arms = node("td");
+    for (const measurement of measurements) {
+      arms.append(node("span", "", `${formatSessionDate(measurement.timestamp)} · ${measurement.left} / ${measurement.right}`));
+    }
+    row.append(performance, arms);
+    return row;
+  }).filter(Boolean);
+  const table = node("table", "trend-table");
+  const header = table.createTHead().insertRow();
+  for (const title of ["周起始", "完成剂量", "左右围度（cm）"]) header.append(node("th", "", title));
+  table.createTBody().append(...rows);
+  elements.experimentContent.replaceChildren(rows.length ? table : node("p", "plan-item__dose", "暂无围度或正式弯举记录。"));
+}
+
+function newId() {
+  return window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function startWorkout(plan, manual) {
   workout = {
-    id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    startedAt: new Date().toISOString(),
-    plan,
-    exerciseIndex: 0,
-    stepIndex: 0,
-    paused: false,
-    remainingMs: 0,
-    deadline: 0,
-    nextCountdownSecond: 3,
-    records: [],
-    adjustments: [],
+    id: newId(), startedAt: new Date().toISOString(), plan, manual,
+    exerciseIndex: 0, stepIndex: 0, paused: false, remainingMs: 0, deadline: 0,
+    nextCountdownSecond: 3, adjustments: [],
     results: plan.map((item) => ({
-      exerciseId: item.exercise.id,
-      level: item.dose.level,
-      prescribedDose: { ...item.dose },
-      completedWorkSteps: 0,
+      id: newId(), completedWorkSteps: 0,
       totalWorkSteps: item.steps.filter((step) => step.phase === "work").length,
-      skippedWorkSteps: 0,
-      completed: false,
+      skippedWorkSteps: 0, completed: manual,
     })),
   };
-  showView("workout");
-  requestWakeLock();
-  enterCurrentStep();
+  if (manual) {
+    renderExerciseFeedback();
+  } else {
+    showView("workout");
+    requestWakeLock();
+    enterCurrentStep();
+  }
 }
 
 function enterCurrentStep() {
@@ -574,7 +422,7 @@ function tickTimer() {
 }
 
 function finishStep({ skipped }) {
-  if (!workout) return;
+  if (!workout || workout.saving) return;
   const step = currentStep();
   const result = workout.results[workout.exerciseIndex];
   clearTimer();
@@ -591,35 +439,23 @@ function finishStep({ skipped }) {
   }
 }
 
-function completeCurrentExercise() {
-  if (!workout) return;
+function completeCurrentExercise(manual = false) {
+  if (!workout || workout.saving) return;
   const result = workout.results[workout.exerciseIndex];
-  result.completed = result.completedWorkSteps === result.totalWorkSteps && result.skippedWorkSteps === 0;
+  result.completed = manual || result.completedWorkSteps === result.totalWorkSteps;
   clearTimer();
-  speak("exercise_complete", "Exercise complete. How did that feel?", { interrupt: true });
+  releaseWakeLock();
+  speak("exercise_complete", "How did that feel?");
   vibrate([80, 70, 120]);
   renderExerciseFeedback();
-  showView("feedback");
 }
 
 function skipExercise() {
-  if (!workout) return;
-  clearTimer();
-  const item = workout.plan[workout.exerciseIndex];
-  const result = workout.results[workout.exerciseIndex];
-  const remainingWork = item.steps.slice(workout.stepIndex).filter((step) => step.phase === "work").length;
-  result.skippedWorkSteps += remainingWork;
-  result.completed = false;
-  const record = createRecord(result, null);
-  workout.records.push(record);
-  workout.adjustments.push(applyProgression(record));
-  persistWorkoutSession("in_progress");
-  speak("exercise_skipped", "Exercise skipped. Get ready for the next movement.");
-  window.setTimeout(advanceToNextExercise, 1200);
+  submitResult(null);
 }
 
 function togglePause() {
-  if (!workout) return;
+  if (!workout || workout.saving) return;
   if (workout.paused) {
     workout.paused = false;
     workout.deadline = Date.now() + workout.remainingMs;
@@ -675,224 +511,202 @@ function currentStep() {
   return workout?.plan[workout.exerciseIndex]?.steps[workout.stepIndex] || null;
 }
 
-function renderExerciseFeedback() {
-  if (!workout) return;
+function renderExerciseFeedback(negative = false) {
+  showView("feedback");
   const item = workout.plan[workout.exerciseIndex];
-  elements.feedbackProgress.textContent = `EXERCISE ${workout.exerciseIndex + 1} OF ${workout.plan.length}`;
+  const result = workout.results[workout.exerciseIndex];
+  elements.feedbackProgress.textContent = `动作 ${workout.exerciseIndex + 1} / ${workout.plan.length}`;
   elements.feedbackExercise.textContent = `${item.exercise.name} · ${item.exercise.chineseName}`;
-  for (const button of elements.feedbackForm.querySelectorAll("button")) button.disabled = false;
+  elements.feedbackIntro.textContent = result.completed
+    ? "训练当天或次日如有症状加重，可在首页报告。"
+    : "本次动作未完整完成。仍可报告训练困难或不适。";
+  elements.feedbackChoices.hidden = negative || !result.completed;
+  elements.feedbackReasons.hidden = !negative && result.completed;
+  document.getElementById("feedback-back").hidden = !result.completed;
+  elements.cancelFeedback.hidden = !workout.manual && result.completed && !workout.saveFailed;
+  elements.cancelFeedback.textContent = workout.manual || workout.saveFailed ? "取消" : "跳过这次反馈";
+  for (const control of elements.feedbackForm.querySelectorAll("button")) control.disabled = false;
 }
 
 function saveFeedback(event) {
   event.preventDefault();
-  if (!workout) return;
-  const feedback = event.submitter?.value;
-  if (feedback !== "good" && feedback !== "bad") return;
-  for (const button of elements.feedbackForm.querySelectorAll("button")) button.disabled = true;
-
-  const result = workout.results[workout.exerciseIndex];
-  const record = createRecord(result, feedback);
-  workout.records.push(record);
-  workout.adjustments.push(applyProgression(record));
-  persistWorkoutSession("in_progress");
-  speak(
-    feedback === "good" ? "feedback_good" : "feedback_bad",
-    feedback === "good" ? "Got it. That felt good." : "Got it. We'll keep that in mind.",
-  );
-  window.setTimeout(advanceToNextExercise, 1200);
+  const value = event.submitter?.value;
+  if (value === "+" || value === "0") submitResult(value);
+  else if (value === "difficulty" || value === "symptoms") submitResult("-", value);
 }
 
-function createRecord(result, feedback) {
-  return {
-    timestamp: new Date().toISOString(),
-    exercise_id: result.exerciseId,
-    level: result.level,
-    prescribed_dose: result.prescribedDose,
-    completed: result.completed,
-    feedback,
-  };
+async function submitResult(feedback, reason) {
+  if (!workout || workout.saving) return;
+  const current = workout;
+  const { exercise, dose } = current.plan[current.exerciseIndex];
+  const result = current.results[current.exerciseIndex];
+  const attempted = Boolean(feedback || result.completedWorkSteps
+    || current.plan[current.exerciseIndex].steps[current.stepIndex]?.phase === "work");
+  const input = { id: result.id, sessionId: current.id, startedAt: current.startedAt,
+    completed: Boolean(feedback && result.completed), attempted, dose, feedback, reason };
+  current.saving = true;
+  clearTimer();
+  for (const control of elements.feedbackForm.querySelectorAll("button")) control.disabled = true;
+
+  try {
+    const change = await updateStore((next, time) => current.correction
+      ? replaceFeedback(next, exercise.id, current.correction, feedback, reason, time)
+      : saveTraining(next, exercise.id, input, time));
+    if (change) current.adjustments.push({ name: exercise.chineseName, change });
+    if (current.correction) {
+      workout = null;
+      showView("home");
+      renderHome();
+      renderHistory();
+      elements.historyDialog.showModal();
+      showToast("反馈已更新");
+      return;
+    }
+    if (feedback === "+") speak("feedback_good", "Got it.");
+    else if (feedback === "-") speak(reason === "symptoms" ? null : "feedback_bad",
+      reason === "symptoms" ? "Movement paused." : "Got it.");
+    else speak("exercise_skipped", "Exercise skipped.");
+    await advanceToNextExercise(current);
+  } catch (error) {
+    current.saving = false;
+    current.saveFailed = true;
+    displayError(error);
+    if (workout === current) renderExerciseFeedback();
+  }
 }
 
-function advanceToNextExercise() {
-  if (!workout) return;
-  workout.exerciseIndex += 1;
-  workout.stepIndex = 0;
-  if (workout.exerciseIndex >= workout.plan.length) {
-    finishWorkout();
+async function advanceToNextExercise(current) {
+  if (workout !== current) return;
+  current.exerciseIndex += 1;
+  current.stepIndex = 0;
+  if (current.exerciseIndex >= current.plan.length) {
+    await finishWorkout();
     return;
   }
-  showView("workout");
-  window.setTimeout(() => enterCurrentStep(), 550);
+  window.setTimeout(() => {
+    if (workout !== current) return;
+    current.saving = false;
+    const item = current.plan[current.exerciseIndex];
+    const next = refreshStore() && schedule(store, item.exercise, new Date());
+    if (!next?.due || next.dose.version !== item.dose.version || next.dose.trial !== item.dose.trial) {
+      advanceToNextExercise(current);
+      return;
+    }
+    showView("workout");
+    requestWakeLock();
+    enterCurrentStep();
+  }, 850);
 }
 
-function persistWorkoutSession(status) {
-  if (!workout) return;
-  const session = {
-    id: workout.id,
-    timestamp: workout.startedAt,
-    startedAt: workout.startedAt,
-    completedAt: status === "completed" ? new Date().toISOString() : null,
-    status,
-    records: workout.records.map((record) => ({ ...record })),
-  };
-  store.sessions = [session, ...store.sessions.filter((item) => item.id !== workout.id)].slice(0, 180);
-  saveStore();
+async function closeSession(status) {
+  const current = workout;
+  await updateStore((next, now) => {
+    if (status === "partial") {
+      const { exercise, dose } = current.plan[current.exerciseIndex];
+      const result = current.results[current.exerciseIndex];
+      if (result.completedWorkSteps || currentStep()?.phase === "work") {
+        const nextPlan = schedule(next, exercise, now);
+        if (nextPlan.due && nextPlan.dose.version === dose.version && nextPlan.dose.trial === dose.trial) {
+          saveTraining(next, exercise.id, {
+            id: result.id, sessionId: current.id, startedAt: current.startedAt,
+            completed: false, attempted: true, dose, feedback: null,
+          }, now);
+        }
+      }
+    }
+    const session = next.sessions.find((entry) => entry.id === current.id);
+    if (!session) return;
+    session.status = status;
+    session.completedAt = status === "completed" ? now.toISOString() : null;
+  });
 }
 
-function finishWorkout() {
-  if (!workout) return;
+async function finishWorkout() {
   clearTimer();
   releaseWakeLock();
-  persistWorkoutSession("completed");
-  stopVoice();
-  speak("workout_complete", "Today's session is complete. Nice work.", { interrupt: false });
+  try {
+    await closeSession("completed");
+  } catch (error) {
+    displayError(error);
+  }
   renderSummary(workout.adjustments);
   workout = null;
   showView("summary");
 }
 
-function applyProgression(record) {
-  const exercise = EXERCISES.find((item) => item.id === record.exercise_id);
-  if (!exercise) return { name: record.exercise_id, status: "保持", kind: "hold", detail: "没有剂量变化" };
-  if (!record.completed) {
-    return { name: exercise.name, status: "未计入", kind: "hold", detail: "本次未完整完成，不改变等级或连续记录" };
-  }
-  if (exercise.automaticProgression === false) {
-    return { name: exercise.name, status: "固定剂量", kind: "hold", detail: "活动度动作不自动增加" };
-  }
-
-  const currentLevel = Number(store.levels[exercise.id] || 1);
-  const priorRecords = store.sessions
-    .flatMap((session) => session.records || [])
-    .filter((item) => item.exercise_id === exercise.id && item.completed && FEEDBACK_LABELS[item.feedback]);
-  const evidence = [record, ...priorRecords];
-  const goodStreak = countConsecutiveFeedback(evidence, "good", currentLevel);
-  const badStreak = countConsecutiveFeedback(evidence, "bad", currentLevel);
-
-  if (record.feedback === "bad") store.manualReviews[exercise.id] = false;
-
-  if (record.feedback === "bad" && badStreak >= 2) {
-    const nextLevel = Math.max(1, currentLevel - 1);
-    store.levels[exercise.id] = nextLevel;
-    store.manualReviews[exercise.id] = false;
-    return {
-      name: exercise.name,
-      status: nextLevel < currentLevel ? `降至 LV.${nextLevel}` : "保持 LV.1",
-      kind: nextLevel < currentLevel ? "down" : "hold",
-      detail: nextLevel < currentLevel ? "连续 2 次不舒服，下一次降低一级" : "连续 2 次不舒服，但已在最低等级",
-    };
-  }
-
-  if (record.feedback === "good" && goodStreak >= 3 && currentLevel < exercise.levels.length) {
-    const nextLevel = currentLevel + 1;
-    store.levels[exercise.id] = nextLevel;
-    store.manualReviews[exercise.id] = false;
-    return { name: exercise.name, status: `升至 LV.${nextLevel}`, kind: "up", detail: "连续 3 次没问题，下一次提高一级" };
-  }
-
-  if (record.feedback === "good" && goodStreak >= 3 && currentLevel >= exercise.levels.length) {
-    if (exercise.manualReviewAtMax) {
-      store.manualReviews[exercise.id] = true;
-      return {
-        name: exercise.name,
-        status: "需要人工评估",
-        kind: "review",
-        detail: "LV.6 已连续 3 次没问题；保持当前剂量，请手动评估台面高度、脚距或阻力",
-      };
-    }
-    return { name: exercise.name, status: `保持 LV.${currentLevel}`, kind: "hold", detail: "已达到自动调整上限" };
-  }
-
-  const streak = record.feedback === "good" ? goodStreak : badStreak;
-  const target = record.feedback === "good" ? 3 : 2;
-  return {
-    name: exercise.name,
-    status: `保持 LV.${currentLevel}`,
-    kind: "hold",
-    detail: `连续「${FEEDBACK_LABELS[record.feedback]}」${streak} / ${target} 次`,
-  };
-}
-
-function countConsecutiveFeedback(records, feedback, level) {
-  let count = 0;
-  for (const item of records) {
-    if (Number(item.level) !== level || item.feedback !== feedback) break;
-    count += 1;
-  }
-  return count;
-}
-
 function renderSummary(adjustments) {
-  if (adjustments.some((item) => item.kind === "review")) {
-    elements.summaryCopy.textContent = "有动作已达到自动进阶上限。系统会保持当前剂量，并在首页标记需要人工评估。";
-  } else if (adjustments.some((item) => item.kind === "up")) {
-    elements.summaryCopy.textContent = "你的反馈已满足进阶条件。下面的动作会在下一次训练中增加一级，且不会超过预设上限。";
-  } else if (adjustments.some((item) => item.kind === "down")) {
-    elements.summaryCopy.textContent = "连续两次不舒服的动作已降低一级。下一次会自动使用更轻的剂量。";
-  } else {
-    elements.summaryCopy.textContent = "每个动作的反馈都已保存。还没有满足升降级条件的动作，下一次维持当前计划。";
-  }
-
-  elements.adjustmentList.replaceChildren(
-    ...adjustments.map((item) => {
-      const row = document.createElement("article");
-      row.className = "adjustment-item";
-      const copy = document.createElement("div");
-      const title = document.createElement("strong");
-      title.textContent = item.name;
-      const detail = document.createElement("small");
-      detail.textContent = item.detail;
-      copy.append(title, detail);
-      const result = document.createElement("span");
-      result.className = `adjustment-result adjustment-result--${item.kind}`;
-      result.textContent = item.status;
-      row.append(copy, result);
-      return row;
-    }),
-  );
+  elements.summaryCopy.textContent = adjustments.some(({ change }) => change.type === "paused")
+    ? "因不适暂停的动作会从计划中移除，待评估后可在首页恢复。"
+    : "训练已保存。训练当天或次日如有症状加重，可在首页报告。";
+  elements.adjustmentList.replaceChildren(...adjustments.map(({ name, change }) => {
+    const row = node("article", "adjustment-item");
+    const copy = node("div");
+    copy.append(node("strong", "", name), node("small", "", changeLabel(change)));
+    row.append(copy);
+    return row;
+  }));
 }
 
 function renderHistory() {
-  if (!store.sessions.length) {
-    elements.historyContent.innerHTML = '<div class="history-empty">还没有训练记录。完成第一次训练后会显示在这里。</div>';
-    return;
+  const now = new Date();
+  const adjustments = node("details", "experiment-trend");
+  adjustments.append(node("summary", "", "剂量调整历史"));
+  for (const change of store.changes.slice().reverse()) {
+    const exercise = EXERCISES.find((item) => item.id === change.exerciseId);
+    adjustments.append(node("p", "plan-item__dose",
+      `${formatSessionDate(change.timestamp)} · ${exercise?.chineseName} · ${changeLabel(change)}`));
   }
+  if (!store.changes.length) adjustments.append(node("p", "plan-item__dose", "暂无调整。"));
 
-  elements.historyContent.replaceChildren(
-    ...store.sessions.map((session) => {
-      const article = document.createElement("article");
-      article.className = "history-session";
-      const top = document.createElement("div");
-      top.className = "history-session__top";
-      const date = document.createElement("strong");
-      date.textContent = formatSessionDate(session.timestamp);
-      const time = document.createElement("span");
-      time.textContent = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(session.timestamp));
-      top.append(date, time);
-
-      const feedback = document.createElement("p");
-      feedback.className = "history-session__feedback";
-      const completedRecords = (session.records || []).filter((record) => record.completed && record.feedback);
-      const goodCount = completedRecords.filter((record) => record.feedback === "good").length;
-      const badCount = completedRecords.filter((record) => record.feedback === "bad").length;
-      const sessionLabel = session.status === "completed" ? "已完成" : "未完成";
-      feedback.textContent = `${sessionLabel} · ${goodCount} 个没问题 · ${badCount} 个不舒服`;
-
-      const list = document.createElement("ul");
-      list.className = "history-session__exercises";
-      for (const record of session.records || []) {
-        const exercise = EXERCISES.find((item) => item.id === record.exercise_id);
-        const item = document.createElement("li");
-        item.dataset.completed = String(Boolean(record.completed));
-        item.dataset.feedback = record.feedback || "skipped";
-        const feedbackLabel = record.feedback ? FEEDBACK_LABELS[record.feedback] : record.legacy ? "旧规则记录" : "已跳过";
-        item.textContent = `${exercise?.name || record.exercise_id} ${exercise?.automaticProgression === false ? "" : `LV.${record.level}`} · ${feedbackLabel}`.trim();
-        list.appendChild(item);
+  const sessions = store.sessions.map((session) => {
+    const article = node("article", "history-session");
+    const top = node("div", "history-session__top");
+    const stamp = session.timestamp ?? session.startedAt;
+    const time = stamp && Number.isFinite(Date.parse(stamp))
+      ? new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(stamp)) : "";
+    top.append(node("strong", "", formatSessionDate(stamp)), node("span", "", time));
+    const list = node("ul", "history-session__exercises");
+    for (const record of session.records ?? []) {
+      const exercise = EXERCISES.find((item) => item.id === record.exercise_id);
+      const name = exercise?.chineseName ?? store.archived[record.exercise_id]?.name ?? record.exercise_id;
+      const item = node("li");
+      item.dataset.feedback = record.feedback || "skipped";
+      const label = record.voidedAt ? "反馈已撤销" : (FEEDBACK_LABELS[record.feedback] ?? record.feedback)
+        || (record.completed ? "旧规则记录" : "已跳过");
+      const recovery = record.recovery?.outcome === "ok" ? "恢复无加重" : record.recovery ? "恢复有加重" : "";
+      const reason = { difficulty: "困难", symptoms: "有症状" }[record.reason];
+      item.append(node("span", "", [
+        name, !exercise && "已归档", record.level && `L${record.level}`,
+        record.prescribed_dose?.trial && "试做", doseLabel(exercise, record.prescribed_dose ?? {}),
+        record.prescribed_dose?.resistanceNote, label, reason, recovery,
+      ].filter(Boolean).join(" · ")));
+      const actions = node("div", "inline-actions");
+      if (exercise && !workout) {
+        if (store.undo[exercise.id]?.recordId === record.id && !record.voidedAt) {
+          actions.append(button("撤销反馈", () => act((next, time) => undoFeedback(next, exercise.id, record.id, time))));
+        }
+        if (canReplaceFeedback(store, record)) {
+          actions.append(button("重新反馈", () => {
+            elements.historyDialog.close();
+            startWorkout([{ exercise, dose: record.prescribed_dose, steps: [] }], true);
+            workout.results[0].completed = record.completed;
+            workout.correction = record.id;
+            renderExerciseFeedback();
+          }));
+        }
+        if (canReportWorse(store, exercise.id, record, now)) {
+          actions.append(button("报告加重", () => act((next, time) =>
+            confirmRecovery(next, exercise.id, record.id, "worse", time)), "danger-button"));
+        }
       }
-      article.append(top, feedback, list);
-      return article;
-    }),
-  );
+      if (actions.childElementCount) item.append(actions);
+      list.append(item);
+    }
+    article.append(top, list);
+    return article;
+  });
+  if (!sessions.length) sessions.push(node("p", "history-empty", "还没有训练记录。"));
+  elements.historyContent.replaceChildren(adjustments, ...sessions);
 }
 
 function showView(name) {
@@ -901,9 +715,13 @@ function showView(name) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
-function toggleVoice() {
-  store.voiceEnabled = !store.voiceEnabled;
-  saveStore();
+async function toggleVoice() {
+  try {
+    await updateStore((next) => { next.voiceEnabled = !next.voiceEnabled; });
+  } catch (error) {
+    displayError(error);
+    return;
+  }
   if (!store.voiceEnabled) stopVoice();
   else speak("voice_enabled", "Audio guidance is on.");
   updateVoiceButton();
@@ -968,8 +786,6 @@ async function loadAudioManifest() {
     const response = await fetch(AUDIO_MANIFEST_URL, { cache: "no-store" });
     if (!response.ok) return null;
     audioManifest = await response.json();
-    const firstCue = buildPlan()[0]?.steps[0]?.audioCue;
-    if (firstCue) preloadCue(firstCue);
     ["countdown_3", "countdown_2", "countdown_1"].forEach(preloadCue);
     return audioManifest;
   } catch (_error) {
@@ -1023,8 +839,13 @@ function vibrate(pattern) {
 async function requestWakeLock() {
   if (!("wakeLock" in navigator)) return;
   try {
-    wakeLock = await navigator.wakeLock.request("screen");
-    wakeLock.addEventListener("release", () => { wakeLock = null; });
+    const lock = await navigator.wakeLock.request("screen");
+    if (!workout || views.workout.hidden || wakeLock) {
+      await lock.release();
+      return;
+    }
+    wakeLock = lock;
+    lock.addEventListener("release", () => { if (wakeLock === lock) wakeLock = null; });
   } catch (_error) {
     wakeLock = null;
   }
@@ -1042,6 +863,7 @@ function clearTimer() {
 
 function formatSessionDate(value) {
   const date = new Date(value);
+  if (!value || Number.isNaN(+date)) return "日期未知";
   const today = new Date();
   if (date.toDateString() === today.toDateString()) return "今天";
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(date);
@@ -1054,23 +876,56 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => { elements.toast.hidden = true; }, 2800);
 }
 
-elements.startButton.addEventListener("click", startWorkout);
+function formatScheduleDate(date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(date);
+}
+
+elements.startButton.addEventListener("click", () => startPlan());
 elements.voiceToggle.addEventListener("click", toggleVoice);
 elements.pauseButton.addEventListener("click", togglePause);
 elements.skipStepButton.addEventListener("click", () => finishStep({ skipped: true }));
 elements.skipExerciseButton.addEventListener("click", skipExercise);
+document.getElementById("complete-exercise").addEventListener("click", () => completeCurrentExercise(true));
+document.getElementById("report-symptom").addEventListener("click", () => submitResult("-", "symptoms"));
+document.getElementById("negative-feedback").addEventListener("click", () => renderExerciseFeedback(true));
+document.getElementById("feedback-back").addEventListener("click", () => renderExerciseFeedback());
+elements.cancelFeedback.addEventListener("click", () => {
+  if (workout.saving) return;
+  if (workout.manual || workout.saveFailed) {
+    const returnToHistory = workout.correction;
+    workout = null;
+    showView("home");
+    renderHome();
+    if (returnToHistory) {
+      renderHistory();
+      elements.historyDialog.showModal();
+    }
+  } else {
+    skipExercise();
+  }
+});
 elements.exitWorkout.addEventListener("click", () => {
-  if (workout && !workout.paused) togglePause();
+  if (!workout || workout.saving) return;
+  if (!workout.paused) togglePause();
   elements.confirmDialog.showModal();
 });
-elements.confirmCancel.addEventListener("click", () => {
-  elements.confirmDialog.close();
+elements.confirmCancel.addEventListener("click", () => elements.confirmDialog.close());
+elements.confirmDialog.addEventListener("close", () => {
   if (workout?.paused) togglePause();
 });
-elements.confirmExit.addEventListener("click", () => {
+elements.confirmExit.addEventListener("click", async () => {
+  if (!workout || workout.saving) return;
+  workout.saving = true;
   clearTimer();
   releaseWakeLock();
   stopVoice();
+  try {
+    await closeSession("partial");
+  } catch (error) {
+    displayError(error);
+  }
   workout = null;
   elements.confirmDialog.close();
   showView("home");
@@ -1082,6 +937,7 @@ elements.doneButton.addEventListener("click", () => {
   showView("home");
 });
 elements.historyButton.addEventListener("click", () => {
+  refreshStore();
   renderHistory();
   elements.historyDialog.showModal();
 });
@@ -1089,22 +945,69 @@ elements.closeHistory.addEventListener("click", () => elements.historyDialog.clo
 elements.historyDialog.addEventListener("click", (event) => {
   if (event.target === elements.historyDialog) elements.historyDialog.close();
 });
-elements.resetDataButton.addEventListener("click", () => {
-  if (!window.confirm("确定清除全部训练记录和自动调整等级吗？此操作无法撤销。")) return;
-  store = defaultStore();
-  saveStore();
-  renderHistory();
-  renderHome();
-  showToast("训练数据已清除");
+elements.resetDataButton.addEventListener("click", async () => {
+  if (!window.confirm("确定清除全部训练记录与等级？此操作无法撤销。")) return;
+  try {
+    await updateStore((next) => {
+      for (const key of Object.keys(next)) delete next[key];
+      Object.assign(next, migrateStore());
+    });
+    renderHistory();
+    renderHome();
+    showToast("训练数据已清除");
+  } catch (error) {
+    displayError(error);
+  }
+});
+elements.measurementForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(elements.measurementForm);
+  try {
+    await updateStore((next, now) => {
+      const values = { timestamp: now.toISOString(), left: Number(data.get("left")), right: Number(data.get("right")) };
+      next.measurements.unshift(values);
+    });
+    elements.measurementForm.reset();
+    renderExperiment(new Date());
+    showToast("围度已保存");
+  } catch (error) {
+    displayError(error);
+  }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && workout && !wakeLock) requestWakeLock();
+  if (document.visibilityState !== "visible") return;
+  if (workout && !views.workout.hidden && !wakeLock) requestWakeLock();
+  if (!views.home.hidden && refreshStore()) renderHome();
 });
+window.addEventListener("storage", (event) => {
+  if (event.key !== STORAGE_KEY || !refreshStore()) return;
+  const active = workout?.plan[workout.exerciseIndex];
+  if (active && !workout.saving && !workout.correction && store.exercises[active.exercise.id].status === "paused") {
+    clearTimer();
+    releaseWakeLock();
+    stopVoice();
+    workout = null;
+    if (elements.confirmDialog.open) elements.confirmDialog.close();
+    showView("home");
+    showToast("该动作已暂停，请查看今日计划。");
+  }
+  if (!views.home.hidden) renderHome();
+  if (elements.historyDialog.open) renderHistory();
+});
+window.setInterval(() => {
+  if (!views.home.hidden && !document.hidden) renderHome();
+}, 60_000);
 window.addEventListener("beforeunload", () => {
   clearTimer();
   releaseWakeLock();
 });
 
+if (refreshStore()) {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+  if (saved && saved.version !== store.version && localStorage.getItem(STORAGE_KEY)) {
+    updateStore(() => {}).catch(displayError);
+  }
+}
 showView("home");
 renderHome();
-audioManifestPromise.catch(() => {});
+loadAudioManifest();
