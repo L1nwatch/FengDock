@@ -1,0 +1,280 @@
+"""Browser and MCP round-trip tests against an isolated Conclusion database."""
+
+import json
+from contextlib import contextmanager
+import socket
+from threading import Thread
+from time import monotonic, sleep
+
+import pytest
+import uvicorn
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from playwright.sync_api import expect, sync_playwright
+
+from test_mcp_server import _load_mcp_app
+from vendor.conclusion.app.main import FRONTEND_DIST, create_app
+
+
+@pytest.fixture
+def decision_workflow(tmp_path, monkeypatch):
+    module = _load_mcp_app(tmp_path, monkeypatch)
+    app = create_app(module.CONCLUSION_DATABASE_PATH)
+    read = module.provider._issue_tokens("test", ["fengdock:read"], "owner", module.provider.resource_url)
+    write = module.provider._issue_tokens("test", module.provider.scopes, "owner", module.provider.resource_url)
+    with (
+        TestClient(app) as api,
+        TestClient(module.app, base_url="https://watch0.top") as mcp,
+    ):
+        def call(name, arguments, *, read_only=False):
+            token = read if read_only else write
+            response = mcp.post(
+                "/mcp",
+                headers={
+                    "Authorization": f"Bearer {token.access_token}",
+                    "Accept": "application/json, text/event-stream",
+                },
+                json={
+                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+            )
+            assert response.status_code == 200, response.text
+            return response.json()["result"]
+
+        yield app, api, call
+
+
+def _example():
+    return json.loads(
+        (FRONTEND_DIST.parents[1] / "tests/fixtures/celpip-decision.json").read_text(encoding="utf-8")
+    )
+
+
+def _result(response):
+    assert not response.get("isError"), response
+    return response["structuredContent"]
+
+
+def test_decision_mcp_scopes_errors_and_http_round_trip(decision_workflow):
+    _, api, call = decision_workflow
+    form = _example()
+    denied = call("create_decision", form, read_only=True)
+    assert denied["isError"] and "fengdock:write" in denied["content"][0]["text"]
+
+    example = _result(call("create_decision", form))
+    ids = {"decision_id": example["id"]}
+    url = f"/api/decisions/{example['id']}"
+    listed = _result(call("list_decisions", {
+        "query": "cec", "status": "Thinking", "limit": 1,
+    }, read_only=True))
+    assert listed["count"] == 1 and listed["items"][0]["id"] == example["id"]
+    assert example == api.get(url).json() == _result(call("get_decision", ids, read_only=True))
+
+    args = {**ids, "expected_version": 1}
+    changes = {"title": "CEC 与英语策略", "description": "example"}
+    operations = [
+        {"op": "add", "id": "branch", "parentId": "draw", "text": "检查进度"},
+        {"op": "add", "id": "child", "parentId": "branch", "text": "复查"},
+        {"op": "update", "id": "branch", "changes": {"positionX": 100, "positionY": 150}},
+    ]
+    for name, payload in (
+        ("update_decision", {**args, "changes": changes}),
+        ("update_decision_tree", {**args, "operations": operations}),
+        ("delete_decision", args),
+    ):
+        denied = call(name, payload, read_only=True)
+        assert denied["isError"] and "fengdock:write" in denied["content"][0]["text"]
+
+    updated = _result(call("update_decision", {**args, "changes": changes}))
+    assert updated["title"] == changes["title"] and updated["version"] == 2
+    stale = call("update_decision_tree", {**args, "operations": operations})
+    assert stale["isError"] and "currentVersion=2" in stale["content"][0]["text"]
+    batch = _result(call("update_decision_tree", {**args, "expected_version": 2, "operations": operations}))
+    assert batch == api.get(url).json() and batch["version"] == 3
+
+    rolled_back = call("update_decision_tree", {
+        **args, "expected_version": 3, "operations": [
+            {"op": "delete", "id": "pr"},
+            {"op": "move", "id": "branch", "parentId": "child"},
+        ],
+    })
+    assert rolled_back["isError"] and "cycle" in rolled_back["content"][0]["text"]
+    assert api.get(url).json() == batch
+    assert _result(call("delete_decision", {**args, "expected_version": 3}))["deleted"] is True
+    assert api.get(url).status_code == 404
+
+
+@contextmanager
+def _serve(app):
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", lifespan="off"))
+        worker = Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        worker.start()
+        try:
+            deadline = monotonic() + 5
+            while not server.started:
+                if monotonic() > deadline:
+                    raise RuntimeError("Conclusion test server did not start")
+                sleep(0.02)
+            yield f"http://127.0.0.1:{sock.getsockname()[1]}"
+        finally:
+            server.should_exit = True
+            worker.join(timeout=5)
+
+
+@pytest.mark.e2e
+def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
+    app, api, call = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    form = _example()
+    example = _result(call("create_decision", form))
+    ids = {"decision_id": example["id"]}
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(10000)
+        page_errors = []
+        page.on("pageerror", lambda error: page_errors.append(str(error)))
+        page.goto(f"{url}/conclusion/")
+        expect(page.get_by_role("heading", name="最近结论")).to_be_visible()
+        page.get_by_role("link", name="Decision Trees").click()
+        search = page.get_by_role("textbox", name="搜索决策标题")
+        search.fill("not a title")
+        expect(page.get_by_text("没有匹配的决策")).to_be_visible()
+        search.fill("CEC 抽签")
+        page.get_by_role("link", name=form["title"]).click()
+        canvas = page.locator(".tree-canvas")
+
+        def card(node_id):
+            return page.locator(f'[data-node-id="{node_id}"]')
+
+        def saved_node(state, node_id):
+            return next(node for node in state["nodes"] if node["id"] == node_id)
+
+        expect(canvas.get_by_role("button", name="CELPIP", exact=True)).to_be_visible()
+        expect(canvas.locator(".vue-flow__edge")).to_have_count(14)
+        viewport = canvas.locator(".vue-flow__transformationpane")
+        before_zoom = viewport.get_attribute("style")
+        canvas.get_by_role("button", name="放大").click()
+        expect(viewport).not_to_have_attribute("style", before_zoom)
+        before_pan = viewport.get_attribute("style")
+        pane = canvas.locator(".vue-flow__pane").bounding_box()
+        assert pane
+        x, y = pane["x"] + 50, pane["y"] + pane["height"] - 70
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 40, y - 20, steps=8)
+        page.mouse.up()
+        expect(viewport).not_to_have_attribute("style", before_pan)
+        canvas.get_by_role("button", name="适应画布").click()
+        canvas.get_by_role("button", name="自动布局").click()
+        page.get_by_role("button", name="保存决策树").click()
+        expect(page.get_by_text("已保存 · v2")).to_be_visible()
+        before = _result(call("get_decision", ids))
+
+        label = card("no-draw").get_by_role("button", name="没有 CEC 抽签")
+        box = label.bounding_box()
+        assert box
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 55, y + 24, steps=12)
+        page.mouse.up()
+        page.get_by_role("button", name="保存决策树").click()
+        expect(page.get_by_text("已保存 · v3")).to_be_visible()
+        moved = _result(call("get_decision", ids))
+        delta = saved_node(moved, "no-draw")["positionX"] - saved_node(before, "no-draw")["positionX"]
+        assert delta > 10
+        for node in ("pr", "travel"):
+            assert saved_node(moved, node)["positionX"] - saved_node(before, node)["positionX"] == pytest.approx(delta)
+        assert saved_node(moved, "no-draw")["parentId"] == "celpip"
+
+        card("no-draw").get_by_role("button", name="拖拽分支").drag_to(card("draw"))
+        expect(page.get_by_text("有未保存的更改 · v3")).to_be_visible()
+        card("no-draw").get_by_role("button", name="拖拽分支").drag_to(
+            card("score"), target_position={"x": 24, "y": 2}
+        )
+        card("no-draw").get_by_role("button", name="没有 CEC 抽签").click()
+        page.get_by_role("button", name="添加子节点").click()
+        page.get_by_role("textbox", name="节点文字").fill("新增中文条件分支")
+        page.get_by_role("combobox", name="类型").press("Enter")
+        page.get_by_role("option", name="Condition", exact=True).click()
+        card("no-draw").get_by_role("button", name="折叠分支").click()
+        expect(canvas.get_by_role("button", name="新增中文条件分支")).to_have_count(0)
+        page.get_by_role("button", name="保存决策树").click()
+        expect(page.get_by_text("已保存 · v4")).to_be_visible()
+
+        state = _result(call("get_decision", ids))
+        assert saved_node(state, "no-draw")["parentId"] == "draw"
+        assert saved_node(state, "no-draw")["order"] == 0 and saved_node(state, "score")["order"] == 1
+        assert saved_node(state, "pr")["parentId"] == "no-draw"
+        assert saved_node(state, "no-draw")["collapsed"]
+        assert next(node for node in state["nodes"] if node["text"] == "新增中文条件分支")["type"] == "Condition"
+        page.reload()
+        expect(card("no-draw").get_by_role("button", name="展开分支")).to_be_visible()
+        card("no-draw").get_by_role("button", name="展开分支").click()
+        expect(canvas.get_by_role("button", name="新增中文条件分支")).to_be_visible()
+
+        remote = _result(call("update_decision_tree", {
+            **ids, "expected_version": 4, "operations": [
+                {"op": "add", "id": "remote", "parentId": "celpip", "text": "MCP 分支"},
+                {"op": "add", "id": "remote-child", "parentId": "remote", "text": "远程下一步"},
+                {"op": "move", "id": "pr", "parentId": "remote", "order": 0},
+                {"op": "update", "id": "pr", "changes": {"text": "MCP 更新"}},
+                {"op": "delete", "id": "mid"},
+            ],
+        }))
+        page.get_by_role("button", name="保存决策树").click()
+        expect(page.get_by_text("这条决策已更新。请重新加载最新版本后再保存。")).to_be_visible()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="重新加载").click()
+        expect(canvas.get_by_role("button", name="MCP 更新")).to_be_visible()
+        expect(canvas.get_by_role("button", name="远程下一步")).to_be_visible()
+        expect(card("mid-high")).to_have_count(0)
+        assert api.get(f"/api/decisions/{example['id']}").json() == remote
+
+        page.get_by_role("link", name="决策列表").click()
+        page.get_by_role("button", name="新建决策").click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_role("textbox", name="决策标题").fill("Browser decision")
+        page.get_by_role("button", name="创建并打开").click()
+        expect(page.get_by_role("heading", name="Browser decision")).to_be_visible()
+        expect(canvas.get_by_role("button", name="Browser decision")).to_be_visible()
+        page.get_by_role("button", name="添加子节点").click()
+        page.get_by_role("textbox", name="节点文字").fill("Retained child")
+        page.get_by_role("button", name="添加同级").click()
+        page.get_by_role("textbox", name="节点文字").fill("Removed sibling")
+        page.get_by_role("button", name="删除分支").click()
+        page.get_by_role("dialog").get_by_role("button", name="删除分支").click()
+        page.get_by_role("button", name="保存决策树").click()
+        expect(page.get_by_text("已保存 · v2")).to_be_visible()
+        expect(canvas.get_by_role("button", name="Retained child")).to_be_visible()
+        expect(canvas.get_by_role("button", name="Removed sibling")).to_have_count(0)
+        page.get_by_role("link", name="决策列表").click()
+        row = page.get_by_role("listitem").filter(has_text="Browser decision")
+        row.get_by_role("button", name="编辑").click()
+        dialog.get_by_role("textbox", name="决策标题").fill("Renamed")
+        dialog.get_by_role("textbox", name="背景描述").fill("Sample background")
+        dialog.get_by_role("combobox", name="状态").press("Enter")
+        page.get_by_role("option", name="Decided", exact=True).click()
+        page.get_by_role("button", name="保存", exact=True).click()
+        row = page.get_by_role("listitem").filter(has_text="Renamed")
+        expect(row.get_by_text("Sample background")).to_be_visible()
+        expect(row.get_by_text("Decided")).to_be_visible()
+        row.get_by_role("button", name="删除").click()
+        page.get_by_role("button", name="删除决策").click()
+        expect(row).to_have_count(0)
+
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.get_by_role("link", name=form["title"]).click()
+        expect(canvas).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        assert page_errors == []
+        browser.close()

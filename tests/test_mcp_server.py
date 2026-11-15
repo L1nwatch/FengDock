@@ -61,6 +61,10 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         "update_conclusion",
         "create_decision_model",
         "update_decision_model",
+        "create_decision",
+        "update_decision",
+        "update_decision_tree",
+        "delete_decision",
         "create_scrum",
         "update_scrum",
         "manage_scrum_items",
@@ -72,7 +76,9 @@ def test_mcp_requires_oauth_and_advertises_tool_side_effects(tmp_path, monkeypat
         for name, tool in by_name.items()
         if name not in write_names
     )
-    assert {tool.name for tool in tools if tool.annotations.destructiveHint} == {"manage_scrum_items"}
+    assert {tool.name for tool in tools if tool.annotations.destructiveHint} == {
+        "manage_scrum_items", "update_decision_tree", "delete_decision",
+    }
 
 
 def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch):
@@ -176,7 +182,7 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
         )
         assert listed.status_code == 200, listed.text
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 26
+        assert len(tools) == 32
         assert {tool["name"] for tool in tools} >= {
             "search_todos",
             "create_todo",
@@ -188,6 +194,12 @@ def test_oauth_pkce_flow_issues_access_and_refresh_tokens(tmp_path, monkeypatch)
             "update_conclusion",
             "list_decision_models",
             "update_decision_model",
+            "list_decisions",
+            "get_decision",
+            "create_decision",
+            "update_decision",
+            "update_decision_tree",
+            "delete_decision",
             "create_scrum",
             "update_scrum",
             "manage_scrum_items",

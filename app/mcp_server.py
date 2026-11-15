@@ -9,8 +9,9 @@ import re
 import sqlite3
 import sys
 from datetime import date
+from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Callable, Literal
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -29,6 +30,18 @@ from mcp.types import ToolAnnotations
 
 from app.mcp_auth import PersistentOAuthProvider
 from app.mcp_todo import Priority, TodoChanges, TodoCompletion, TodoId, TodoLabel, TodoState, TodoTitle, WorkflowStatus
+from vendor.conclusion.app import db as decision_db
+from vendor.conclusion.app.schemas import (
+    DecisionChanges,
+    DecisionCreate,
+    DecisionList,
+    DecisionNodeInput,
+    DecisionNodeOperation,
+    DecisionRecord,
+    DecisionStatus,
+    DecisionTreeUpdate,
+    DecisionVersion,
+)
 from vendor.TriggerToDo.app.scrum_contract import (
     ScrumChanges,
     ScrumDate,
@@ -76,6 +89,7 @@ mcp = FastMCP(
         "verify tasks. Date triggers control Today visibility and do not send notifications. "
         "Use the Scrum write tools when the user asks to change a "
         "Sprint or its backlog, and Conclusion write tools when asked to save or update a conclusion. "
+        "Use list_decisions and get_decision for Decision Trees. Use their latest version for writes. "
         "Removing a Scrum item unlinks it from its Sprint and keeps the underlying task. No tool deletes tasks, "
         "runs triggers, refreshes finance data, or synchronizes external systems."
     ),
@@ -1158,6 +1172,133 @@ async def update_decision_model(
         }
 
     return await asyncio.to_thread(write)
+
+
+decision_destructive = write_tool.model_copy(update={"destructiveHint": True})
+
+
+async def _run_decision_operation(
+    operation: Callable[[sqlite3.Connection], Any],
+    *,
+    read: bool = False,
+    initialize: bool = False,
+) -> Any:
+    if not read:
+        _require_write_scope("Decision Tree")
+
+    def execute() -> Any:
+        try:
+            with decision_db.connect(CONCLUSION_DATABASE_PATH, read_only=read) as connection:
+                if initialize and connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'decisions'"
+                ).fetchone() is None:
+                    decision_db.init_db(connection)
+                return operation(connection)
+        except decision_db.DecisionVersionConflictError as exc:
+            raise ToolError(f"{exc}; currentVersion={exc.current_version}") from None
+        except (decision_db.DecisionNotFoundError, decision_db.InvalidDecisionTreeError) as exc:
+            raise ToolError(str(exc)) from None
+        except sqlite3.Error as exc:
+            raise ToolError("Decision Tree data is currently unavailable") from exc
+
+    return await asyncio.to_thread(execute)
+
+
+@mcp.tool(annotations=read_only)
+async def list_decisions(
+    query: str | None = Field(default=None, max_length=200, description="Search decision titles"),
+    status: DecisionStatus | None = None,
+    limit: int = Field(default=50, ge=1, le=200),
+    offset: int = Field(default=0, ge=0),
+) -> DecisionList:
+    """List Decision Trees with their metadata, latest version, and total matching count."""
+    record = await _run_decision_operation(
+        partial(decision_db.list_decisions, query=query, status=status, limit=limit, offset=offset),
+        read=True,
+    )
+    return DecisionList.model_validate(record)
+
+
+@mcp.tool(annotations=read_only)
+async def get_decision(decision_id: int = Field(ge=1)) -> DecisionRecord:
+    """Read a Decision and all nodes, including the root ID, layout, and current version."""
+    record = await _run_decision_operation(
+        partial(decision_db.get_decision, decision_id=decision_id), read=True,
+    )
+    return DecisionRecord.model_validate(record)
+
+
+@mcp.tool(annotations=write_tool)
+async def create_decision(
+    title: str = Field(min_length=1, max_length=200),
+    description: str | None = Field(default=None, max_length=10000),
+    status: DecisionStatus = "Draft",
+    nodes: list[DecisionNodeInput] | None = Field(
+        default=None, min_length=1,
+        description="Optional flat initial tree. Use one root with a null parentId, unique node IDs, "
+        "and consecutive sibling orders starting at 0. Omit to create a root from the title.",
+    ),
+) -> DecisionRecord:
+    """Create one Decision and its complete initial tree in a single write."""
+    try:
+        payload = DecisionCreate(title=title, description=description, status=status, nodes=nodes)
+    except ValidationError as exc:
+        raise _validation_tool_error(exc) from None
+    record = await _run_decision_operation(
+        partial(decision_db.create_decision, values=payload.model_dump()), initialize=True,
+    )
+    return DecisionRecord.model_validate(record)
+
+
+@mcp.tool(annotations=write_tool)
+async def update_decision(
+    decision_id: int = Field(ge=1),
+    expected_version: DecisionVersion = Field(description="Latest version from get_decision"),
+    changes: DecisionChanges = Field(description="Set only the title, description, or status to change"),
+) -> DecisionRecord:
+    """Edit Decision metadata using the last observed version."""
+    record = await _run_decision_operation(partial(
+        decision_db.update_decision, decision_id=decision_id, expected_version=expected_version,
+        changes=changes.model_dump(exclude_unset=True),
+    ))
+    return DecisionRecord.model_validate(record)
+
+
+@mcp.tool(annotations=decision_destructive)
+async def update_decision_tree(
+    decision_id: int = Field(ge=1),
+    expected_version: DecisionVersion = Field(description="Latest version from get_decision"),
+    operations: list[DecisionNodeOperation] | None = Field(
+        default=None, min_length=1,
+        description="Ordered add, update, move, or delete operations. Delete removes descendants. "
+        "For add or move, order is the zero-based destination index after removal, or omit to append.",
+    ),
+    nodes: list[DecisionNodeInput] | None = Field(
+        default=None, min_length=1,
+        description="Full tree replacement preserving the root ID. Prefer operations for targeted edits.",
+    ),
+) -> DecisionRecord:
+    """Apply one atomic node batch or full replacement. Supply exactly one of operations or nodes."""
+    try:
+        payload = DecisionTreeUpdate(expected_version=expected_version, operations=operations, nodes=nodes)
+    except ValidationError as exc:
+        raise _validation_tool_error(exc) from None
+    record = await _run_decision_operation(partial(
+        decision_db.update_decision_tree, decision_id=decision_id, values=payload.db_values(),
+    ))
+    return DecisionRecord.model_validate(record)
+
+
+@mcp.tool(annotations=decision_destructive)
+async def delete_decision(
+    decision_id: int = Field(ge=1),
+    expected_version: DecisionVersion = Field(description="Latest version from get_decision"),
+) -> dict[str, Any]:
+    """Permanently delete the Decision and its whole tree when requested by the user."""
+    await _run_decision_operation(partial(
+        decision_db.delete_decision, decision_id=decision_id, expected_version=expected_version,
+    ))
+    return {"id": decision_id, "deleted": True}
 
 
 app = mcp.streamable_http_app()

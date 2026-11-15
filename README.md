@@ -122,13 +122,15 @@ Fire tools provide read access. Conclusion exposes these tools.
 - `list_conclusions`, `search_conclusions`, `get_conclusion`
 - `create_conclusion`, `update_conclusion`
 - `list_decision_models`, `get_decision_model`, `create_decision_model`, `update_decision_model`
+- `list_decisions`, `get_decision`, `create_decision`, `update_decision`, `update_decision_tree`, `delete_decision`
 
 Decision models are concise guides (`name` + `explanation`). When asked to use them, the MCP workflow applies every registered model briefly before forming the final Conclusion.
 
-Conclusion does not expose deletion through MCP. Conclusion updates require the last observed
+Conclusion record and thinking-model deletion are available from the website. Conclusion updates require the last observed
 `updatedAt`; decision-model updates also require their last observed `updatedAt` and edit the
 current definition in place. Concurrent UI or MCP changes return a conflict instead of being
-silently overwritten. Decision-model deletion is available only from the website.
+silently overwritten. Decision Tree edits and deletion require the last observed `version`.
+`update_decision_tree` accepts an atomic batch of node additions, edits, moves, reorders, and subtree deletions.
 
 The deploy workflow injects these values into Docker Compose. Configure `MCP_AUTH_PASSWORD` as a
 GitHub Actions secret; `MCP_PUBLIC_URL` and `MCP_AUTH_USERNAME` can be repository variables:
