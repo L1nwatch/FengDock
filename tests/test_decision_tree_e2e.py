@@ -353,3 +353,87 @@ def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflo
         page.get_by_role("link", name="Autosave race").click()
         expect(page.get_by_role("button", name="Saved before navigation")).to_be_visible()
         browser.close()
+
+
+@pytest.mark.e2e
+def test_growing_a_branch_keeps_it_apart_and_shares_one_connector(decision_workflow):
+    app, api, _ = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    seed = [
+        ("root", None, 0, 0, 0),
+        ("a", "root", 0, 298, 0),
+        ("a1", "a", 0, 596, 0),
+        ("a2", "a", 1, 596, 277),
+        ("b", "root", 1, 298, 92),
+        ("b1", "b", 0, 596, 92),
+        ("b2", "b", 1, 596, 184),
+    ]
+    record = api.post("/api/decisions", json={
+        "title": "Layout regression",
+        "nodes": [
+            {"id": key, "parentId": parent, "order": order, "text": key,
+             "positionX": x, "positionY": y}
+            for key, parent, order, x, y in seed
+        ],
+    }).json()
+    decision_id = record["id"]
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(10000)
+        page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
+
+        def card(label):
+            return page.locator(".decision-node-card", has=page.get_by_role(
+                "button", name=label, exact=True,
+            ))
+
+        def bounds(label):
+            box = card(label).bounding_box()
+            assert box
+            return box["y"], box["y"] + box["height"]
+
+        def center(label):
+            top, bottom = bounds(label)
+            return (top + bottom) / 2
+
+        def root_connector(child_id):
+            return page.locator(f'[aria-label="Edge from root to {child_id}"] .vue-flow__edge-path')
+
+        expect(card("a2")).to_be_visible()
+        expect(root_connector("b")).to_have_attribute("d", re.compile(r"^M .* H .* V .* H .*"))
+        assert bounds("a2")[1] < bounds("b1")[0]
+        assert center("root") == pytest.approx((center("a") + center("b")) / 2, abs=1)
+        assert api.get(f"/api/decisions/{decision_id}").json()["version"] == 1
+
+        junctions = [
+            re.search(r" H ([^ ]+) V ", root_connector(child).get_attribute("d")).group(1)
+            for child in ("a", "b")
+        ]
+        assert junctions[0] == junctions[1]
+
+        children = ["A 的第三个子节点", "A 的第四个子节点 " + "可以换行的长文字" * 7]
+        field = page.get_by_role("textbox", name="节点文字")
+        for label in children:
+            page.get_by_role("button", name="a", exact=True).click()
+            page.keyboard.press("Tab")
+            expect(field).to_be_focused()
+            field.fill(label)
+            field.press("Enter")
+        _expect_saved(page)
+
+        for _ in range(2):
+            for label in children:
+                expect(card(label)).to_be_visible()
+                assert bounds(label)[1] < bounds("b1")[0]
+            assert center("a") == pytest.approx((center("a1") + center(children[-1])) / 2, abs=1)
+            assert center("root") == pytest.approx((center("a") + center("b")) / 2, abs=1)
+            record = api.get(f"/api/decisions/{decision_id}").json()
+            assert all(node["parentId"] == "a" for node in record["nodes"] if node["text"] in children)
+            page.reload()
+        browser.close()
