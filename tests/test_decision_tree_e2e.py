@@ -1,6 +1,7 @@
 """Browser and MCP round-trip tests against an isolated Conclusion database."""
 
 import json
+import re
 from contextlib import contextmanager
 import socket
 from threading import Thread
@@ -54,6 +55,10 @@ def _example():
 def _result(response):
     assert not response.get("isError"), response
     return response["structuredContent"]
+
+
+def _expect_saved(page):
+    expect(page.get_by_role("status").filter(has_text=re.compile(r"^已保存 · v\d+$"))).to_be_visible()
 
 
 def test_decision_mcp_scopes_errors_and_http_round_trip(decision_workflow):
@@ -160,6 +165,8 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
 
         expect(canvas.get_by_role("button", name="CELPIP", exact=True)).to_be_visible()
         expect(canvas.locator(".vue-flow__edge")).to_have_count(14)
+        expect(page.get_by_role("complementary", name="编辑节点")).to_have_count(0)
+        expect(canvas).to_have_css("background-image", "none")
         viewport = canvas.locator(".vue-flow__transformationpane")
         before_zoom = viewport.get_attribute("style")
         canvas.get_by_role("button", name="放大").click()
@@ -175,7 +182,6 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         expect(viewport).not_to_have_attribute("style", before_pan)
         canvas.get_by_role("button", name="适应画布").click()
         canvas.get_by_role("button", name="自动布局").click()
-        page.get_by_role("button", name="保存决策树").click()
         expect(page.get_by_text("已保存 · v2")).to_be_visible()
         before = _result(call("get_decision", ids))
 
@@ -187,7 +193,6 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         page.mouse.down()
         page.mouse.move(x + 55, y + 24, steps=12)
         page.mouse.up()
-        page.get_by_role("button", name="保存决策树").click()
         expect(page.get_by_text("已保存 · v3")).to_be_visible()
         moved = _result(call("get_decision", ids))
         delta = saved_node(moved, "no-draw")["positionX"] - saved_node(before, "no-draw")["positionX"]
@@ -197,19 +202,28 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         assert saved_node(moved, "no-draw")["parentId"] == "celpip"
 
         card("no-draw").get_by_role("button", name="拖拽分支").drag_to(card("draw"))
-        expect(page.get_by_text("有未保存的更改 · v3")).to_be_visible()
         card("no-draw").get_by_role("button", name="拖拽分支").drag_to(
             card("score"), target_position={"x": 24, "y": 2}
         )
         card("no-draw").get_by_role("button", name="没有 CEC 抽签").click()
-        page.get_by_role("button", name="添加子节点").click()
-        page.get_by_role("textbox", name="节点文字").fill("新增中文条件分支")
+        page.keyboard.press("Tab")
+        text_input = canvas.get_by_role("textbox", name="节点文字")
+        expect(text_input).to_be_focused()
+        expect(text_input).to_have_value("")
+        text_input.fill("新增中文条件分支")
+        text_input.press("Enter")
+        new_node = canvas.get_by_role("button", name="新增中文条件分支")
+        expect(new_node).to_be_focused()
+        page.locator(".decision-node-card", has=page.get_by_role(
+            "button", name="新增中文条件分支",
+        )).get_by_role("button", name="节点操作").click()
+        page.get_by_role("menuitem", name="节点属性").click()
         page.get_by_role("combobox", name="类型").press("Enter")
         page.get_by_role("option", name="Condition", exact=True).click()
+        page.get_by_role("button", name="完成").click()
         card("no-draw").get_by_role("button", name="折叠分支").click()
-        expect(canvas.get_by_role("button", name="新增中文条件分支")).to_have_count(0)
-        page.get_by_role("button", name="保存决策树").click()
-        expect(page.get_by_text("已保存 · v4")).to_be_visible()
+        expect(new_node).to_have_count(0)
+        _expect_saved(page)
 
         state = _result(call("get_decision", ids))
         assert saved_node(state, "no-draw")["parentId"] == "draw"
@@ -219,11 +233,9 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         assert next(node for node in state["nodes"] if node["text"] == "新增中文条件分支")["type"] == "Condition"
         page.reload()
         expect(card("no-draw").get_by_role("button", name="展开分支")).to_be_visible()
-        card("no-draw").get_by_role("button", name="展开分支").click()
-        expect(canvas.get_by_role("button", name="新增中文条件分支")).to_be_visible()
 
         remote = _result(call("update_decision_tree", {
-            **ids, "expected_version": 4, "operations": [
+            **ids, "expected_version": state["version"], "operations": [
                 {"op": "add", "id": "remote", "parentId": "celpip", "text": "MCP 分支"},
                 {"op": "add", "id": "remote-child", "parentId": "remote", "text": "远程下一步"},
                 {"op": "move", "id": "pr", "parentId": "remote", "order": 0},
@@ -231,8 +243,10 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
                 {"op": "delete", "id": "mid"},
             ],
         }))
-        page.get_by_role("button", name="保存决策树").click()
+        card("no-draw").get_by_role("button", name="展开分支").click()
+        expect(new_node).to_be_visible()
         expect(page.get_by_text("这条决策已更新。请重新加载最新版本后再保存。")).to_be_visible()
+        expect(new_node).to_be_visible()
         page.once("dialog", lambda dialog: dialog.accept())
         page.get_by_role("button", name="重新加载").click()
         expect(canvas.get_by_role("button", name="MCP 更新")).to_be_visible()
@@ -246,15 +260,24 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         dialog.get_by_role("textbox", name="决策标题").fill("Browser decision")
         page.get_by_role("button", name="创建并打开").click()
         expect(page.get_by_role("heading", name="Browser decision")).to_be_visible()
-        expect(canvas.get_by_role("button", name="Browser decision")).to_be_visible()
-        page.get_by_role("button", name="添加子节点").click()
-        page.get_by_role("textbox", name="节点文字").fill("Retained child")
-        page.get_by_role("button", name="添加同级").click()
-        page.get_by_role("textbox", name="节点文字").fill("Removed sibling")
-        page.get_by_role("button", name="删除分支").click()
+        root = canvas.get_by_role("button", name="Browser decision")
+        root.dblclick()
+        expect(text_input).to_be_focused()
+        expect(text_input).to_have_value("Browser decision")
+        assert text_input.evaluate("el => el.selectionStart === el.value.length && el.selectionEnd === el.value.length")
+        text_input.press("Escape")
+        expect(root).to_be_focused()
+        page.keyboard.press("Tab")
+        text_input.fill("Retained child")
+        text_input.press("Enter")
+        expect(canvas.get_by_role("button", name="Retained child")).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(text_input).to_be_focused()
+        text_input.fill("Removed sibling")
+        text_input.press("Enter")
+        page.keyboard.press("Delete")
         page.get_by_role("dialog").get_by_role("button", name="删除分支").click()
-        page.get_by_role("button", name="保存决策树").click()
-        expect(page.get_by_text("已保存 · v2")).to_be_visible()
+        _expect_saved(page)
         expect(canvas.get_by_role("button", name="Retained child")).to_be_visible()
         expect(canvas.get_by_role("button", name="Removed sibling")).to_have_count(0)
         page.get_by_role("link", name="决策列表").click()
@@ -277,4 +300,56 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         expect(canvas).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         assert page_errors == []
+        browser.close()
+
+
+@pytest.mark.e2e
+def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflow):
+    app, api, _ = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    record = api.post("/api/decisions", json={"title": "Autosave race"}).json()
+    decision_id = record["id"]
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.set_default_timeout(10000)
+        page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
+        label = page.get_by_role("button", name="Autosave race")
+        text = page.get_by_role("textbox", name="节点文字")
+        label.press("F2")
+        expect(text).to_be_focused()
+
+        blocked = []
+        page.route(f"**/api/decisions/{decision_id}/tree", lambda route: blocked.append(route), times=1)
+        with page.expect_request(lambda request: request.method == "PATCH"):
+            text.fill("First edit")
+        expect(page.get_by_role("status")).to_contain_text("正在保存")
+        text.press("Shift+Enter")
+        page.keyboard.insert_text("补充中文")
+        text.dispatch_event("keydown", {"key": "Enter", "isComposing": True})
+        expect(text).to_be_focused()
+        expect(text).to_have_value("First edit\n补充中文")
+        assert len(blocked) == 1
+        blocked.pop().continue_()
+
+        expect(page.get_by_role("status")).to_have_text("已保存 · v3")
+        expect(text).to_be_focused()
+        expect(text).to_have_value("First edit\n补充中文")
+        saved = api.get(f"/api/decisions/{decision_id}").json()
+        assert saved["nodes"][0]["text"] == "First edit\n补充中文"
+        text.press("Escape")
+        expect(label).to_be_focused()
+        expect(page.get_by_role("status")).to_have_text("已保存 · v4")
+        assert api.get(f"/api/decisions/{decision_id}").json()["nodes"][0]["text"] == "Autosave race"
+
+        label.dblclick()
+        text.fill("Saved before navigation")
+        page.get_by_role("link", name="决策列表").click()
+        page.get_by_role("link", name="Autosave race").click()
+        expect(page.get_by_role("button", name="Saved before navigation")).to_be_visible()
         browser.close()
