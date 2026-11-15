@@ -3,6 +3,7 @@
 import json
 import re
 from contextlib import contextmanager
+from pathlib import Path
 import socket
 from threading import Thread
 from time import monotonic, sleep
@@ -250,10 +251,10 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         card("no-draw").get_by_role("button", name="展开分支").click()
         expect(new_node).to_be_visible()
         page.clock.fast_forward(8000)
-        expect(page.get_by_text("这条决策已更新。请重新加载最新版本后再保存。")).to_be_visible()
+        expect(page.get_by_text("远端已有新版本")).to_be_visible()
         expect(new_node).to_be_visible()
-        page.once("dialog", lambda dialog: dialog.accept())
-        page.get_by_role("button", name="重新加载").click()
+        page.get_by_role("button", name="应用远端").click()
+        page.get_by_role("dialog", name="应用远端版本").get_by_role("button", name="应用远端").click()
         expect(canvas.get_by_role("button", name="MCP 更新")).to_be_visible()
         expect(canvas.get_by_role("button", name="远程下一步")).to_be_visible()
         expect(card("mid-high")).to_have_count(0)
@@ -505,4 +506,65 @@ def test_autosave_batches_edits_and_limits_continuous_wait(decision_workflow):
 
         page.clock.fast_forward(60000)
         assert latest()["version"] == 3
+        browser.close()
+
+
+@pytest.mark.e2e
+def test_applying_local_checks_the_confirmed_remote_version(decision_workflow):
+    app, api, _ = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    record = api.post("/api/decisions", json={
+        "title": "Conflict test",
+        "nodes": [{"id": "root", "text": "Start", "positionX": 0, "positionY": 0}],
+    }).json()
+    decision_id = record["id"]
+    path = f"/api/decisions/{decision_id}"
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        local = browser.new_page(accept_downloads=True)
+        remote = browser.new_page()
+        for page in (local, remote):
+            page.clock.install()
+            page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
+            expect(page.get_by_role("button", name="Start", exact=True)).to_be_visible()
+
+        def edit_root(page, old, new):
+            page.get_by_role("button", name=old, exact=True).press("F2")
+            editor = page.get_by_role("textbox", name="节点文字")
+            editor.fill(new)
+            editor.press("Enter")
+            page.clock.fast_forward(8000)
+
+        edit_root(remote, "Start", "Remote edit")
+        expect(remote.get_by_role("status")).to_have_text("已保存 · v2")
+        edit_root(local, "Start", "Local edit")
+        expect(local.get_by_text("远端 v2", exact=False)).to_be_visible()
+        expect(local.get_by_role("button", name="Local edit")).to_be_visible()
+
+        apply_local = local.locator(".conflict-actions").get_by_role("button", name="应用本地")
+        apply_local.click()
+        dialog = local.get_by_role("dialog", name="应用本地版本")
+        expect(dialog).to_contain_text("覆盖远端 v2")
+        edit_root(remote, "Remote edit", "Newer remote edit")
+        expect(remote.get_by_role("status")).to_have_text("已保存 · v3")
+        with local.expect_download() as first_backup:
+            dialog.get_by_role("button", name="应用本地").click()
+        assert first_backup.value.suggested_filename == f"decision-{decision_id}-remote-v2.json"
+        expect(local.get_by_text("远端 v3", exact=False)).to_be_visible()
+        expect(dialog).to_be_hidden()
+        assert api.get(path).json()["nodes"][0]["text"] == "Newer remote edit"
+
+        apply_local.click()
+        expect(dialog).to_contain_text("覆盖远端 v3")
+        with local.expect_download() as latest_backup:
+            dialog.get_by_role("button", name="应用本地").click()
+        backup = json.loads(Path(latest_backup.value.path()).read_text(encoding="utf-8"))
+        assert backup["version"] == 3 and backup["nodes"][0]["text"] == "Newer remote edit"
+        expect(local.get_by_role("status")).to_have_text("已保存 · v4")
+        assert api.get(path).json()["nodes"][0]["text"] == "Local edit"
         browser.close()
