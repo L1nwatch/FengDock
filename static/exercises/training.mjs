@@ -1,10 +1,10 @@
-import { ARCHIVED_EXERCISES, EXERCISES, GROUPS } from "./config.mjs";
+import { ARCHIVED_EXERCISES, EXERCISES, GROUPS } from "./config.mjs?v=4";
 
 export const STORAGE_KEY = "fengdock.exercises.v1";
-const STORAGE_VERSION = 3;
+const STORAGE_VERSION = 4;
 const HOUR = 3_600_000;
 const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((exercise) => [exercise.id, exercise]));
-export const FEEDBACK_LABELS = { "+": "+ 轻松", "0": "0 合适", "-": "− 困难或不适", good: "没问题", bad: "不舒服" };
+export const FEEDBACK_LABELS = { "+": "+ 合适", "0": "0 合适", "-": "− 困难或不适", good: "没问题", bad: "不舒服" };
 
 function initialState(exercise) {
   return {
@@ -21,9 +21,9 @@ function initialState(exercise) {
   };
 }
 
-export function migrateStore(previous = {}) {
+export function migrateStore(previous = {}, now = new Date()) {
   if (previous.version > STORAGE_VERSION) throw new Error("训练记录由较新版本创建");
-  return {
+  const store = {
     ...previous,
     version: STORAGE_VERSION,
     voiceEnabled: previous.voiceEnabled !== false,
@@ -42,6 +42,25 @@ export function migrateStore(previous = {}) {
       { ...initialState(exercise), ...previous.exercises?.[exercise.id] },
     ])),
   };
+  if (previous.version < 4 && previous.exercises?.seated_cat_cow?.tempoSeconds === 6) {
+    const exercise = EXERCISE_BY_ID.seated_cat_cow;
+    const state = store.exercises[exercise.id];
+    const before = { ...state };
+    const { tempoSeconds } = exercise.initial;
+    const undo = store.undo[exercise.id];
+    if (undo) {
+      store.undo = { ...store.undo, [exercise.id]: { ...undo, before: { ...undo.before, tempoSeconds } } };
+    }
+    state.tempoSeconds = tempoSeconds;
+    store.changes = [...store.changes];
+    recordChange(store, exercise, before, "guideTempo", now, ["tempoSeconds"]);
+  }
+  return store;
+}
+
+function matchesDoseVersion(state, version) {
+  return state.version === version
+    || (state.lastChange?.type === "guideTempo" && state.lastChange.before.version === version);
 }
 
 // Use a local calendar date for the daily plan and elapsed time for recovery.
@@ -278,7 +297,7 @@ export function confirmRecovery(store, exerciseId, recordId, outcome, now) {
     }
     const upgrade = record.recovery?.upgrade;
     const before = { ...state };
-    const reverted = upgrade?.after.version === state.version ? upgrade.fields : [];
+    const reverted = upgrade && matchesDoseVersion(state, upgrade.after.version) ? upgrade.fields : [];
     for (const field of reverted) state[field] = upgrade.before[field];
     if (reverted.length) {
       state.level = upgrade.before.level;
@@ -330,7 +349,7 @@ export function undoFeedback(store, exerciseId, recordId, now) {
 
 export function canReplaceFeedback(store, record) {
   const state = store.exercises[record.exercise_id];
-  return record.voidedAt && record.undoVersion === state?.version
+  return record.voidedAt && state && matchesDoseVersion(state, record.undoVersion)
     && latestAttempt(store, record.exercise_id)?.id === record.id;
 }
 

@@ -26,7 +26,7 @@ def test_exercises_get_returns_app():
     assert 'id="start-button"' in body
     assert 'id="feedback-form"' in body
     assert 'name="feedback" value="+"' in body
-    assert 'name="feedback" value="0"' in body
+    assert 'name="feedback" value="0"' not in body
     assert 'id="negative-feedback"' in body
     assert 'name="feedback" value="difficulty"' in body
     assert 'name="feedback" value="symptoms"' in body
@@ -88,6 +88,12 @@ def test_mobile_exercise_feedback_recovery_undo_and_measurements(exercise_page):
     bridge = page.locator('[data-exercise="glute_bridge"]')
     expect(bridge).to_contain_text("1 组 × 10 次 · 保持 2 秒")
     bridge.get_by_role("button", name="已完成", exact=True).click()
+    expect(page.locator("#feedback-choices button")).to_have_count(2)
+    expect(page.locator('[value="+"]')).to_contain_text("合适")
+    page.locator("#negative-feedback").click()
+    expect(page.get_by_role("button", name="太难或控制不佳，且没有不适")).to_be_visible()
+    expect(page.get_by_role("button", name="有疼痛、熟悉的不适、麻木或无力")).to_be_visible()
+    page.locator("#feedback-back").click()
     page.locator('[value="+"]').click()
     page.locator("#done-button").click()
     expect(bridge).to_contain_text("已确认 0 / 7")
@@ -104,8 +110,8 @@ def test_mobile_exercise_feedback_recovery_undo_and_measurements(exercise_page):
     page.get_by_role("button", name="撤销反馈").click()
     expect(page.locator("#history-content")).to_contain_text("反馈已撤销")
     page.get_by_role("button", name="重新反馈").click()
-    page.locator('[value="0"]').click()
-    expect(page.locator("#history-content")).to_contain_text("0 合适")
+    page.locator('[value="+"]').click()
+    expect(page.locator("#history-content")).to_contain_text("+ 合适")
     page.locator("#close-history").click()
 
     page.get_by_label("左上臂（cm）").fill("30.2")
@@ -139,7 +145,7 @@ def test_mobile_guided_plan_symptom_stop_and_curl_trial(exercise_page):
     curl.get_by_role("button", name="开始试做").click()
     expect(page.locator("#step-instruction")).to_contain_text("每侧 3 次")
     page.locator("#complete-exercise").click()
-    page.locator('[value="0"]').click()
+    page.locator('[value="+"]').click()
     page.locator("#done-button").click()
     expect(curl).to_contain_text("确认试做后的恢复")
     page.clock.set_system_time(datetime(2026, 2, 2, 12, tzinfo=timezone.utc))
@@ -187,5 +193,72 @@ def test_archived_exercise_is_migrated_and_visible_in_history(exercise_page):
     expect(history).to_contain_text("保持 45 秒")
     expect(history).to_contain_text("没问题")
     page.wait_for_function(
-        """() => JSON.parse(localStorage.getItem("fengdock.exercises.v1")).version === 3"""
+        """() => JSON.parse(localStorage.getItem("fengdock.exercises.v1")).version === 4"""
     )
+
+
+@pytest.mark.e2e
+def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
+    page = exercise_page
+    page.add_init_script(
+        """{
+            window.exerciseAudio = [];
+            window.exerciseClipsDecoded = 0;
+            const decode = AudioContext.prototype.decodeAudioData;
+            AudioContext.prototype.decodeAudioData = async function (...args) {
+                const buffer = await decode.apply(this, args);
+                window.exerciseClipsDecoded += 1;
+                return buffer;
+            };
+            const start = AudioBufferSourceNode.prototype.start;
+            AudioBufferSourceNode.prototype.start = function (...args) {
+                window.exerciseAudio.push(this.buffer.duration);
+                return start.apply(this, args);
+            };
+        }"""
+    )
+    requested = []
+    page.on("request", lambda request: requested.append(request.url) if request.url.endswith(".mp3") else None)
+    with page.expect_response(lambda response: "/cat_cow_arch." in response.url):
+        page.goto("http://localhost/exercises/")
+    page.wait_for_function(
+        r"""() => new Promise(resolve => {
+            const request = indexedDB.open("fengdock-exercise-clips", 1);
+            request.onsuccess = () => {
+                const database = request.result;
+                const store = database.transaction("clips").objectStore("clips");
+                const keys = store.getAllKeys();
+                keys.onsuccess = () => {
+                    database.close();
+                    resolve(keys.result.filter(key => /^(cat_cow_(cat|arch)|countdown_[123])\./.test(key)).length === 5);
+                };
+                keys.onerror = () => resolve(false);
+            };
+            request.onerror = () => resolve(false);
+        })"""
+    )
+
+    def check_cat_cow_cues():
+        page.locator('[data-exercise="seated_cat_cow"]').get_by_role("button", name="开始引导").click()
+        page.wait_for_function("window.exerciseClipsDecoded >= 5")
+        page.clock.run_for(8100)
+        expect(page.locator("#step-instruction")).to_contain_text("猫式")
+        expect(page.locator("#round-label")).to_contain_text("第 1/8 次")
+        first_phase_end = page.evaluate("window.exerciseAudio.length")
+        page.clock.run_for(5000)
+        countdown = page.evaluate("start => window.exerciseAudio.slice(start)", first_phase_end)
+        assert len(countdown) == 3 and all(length < 1 for length in countdown)
+        page.clock.run_for(1000)
+        expect(page.locator("#step-instruction")).to_contain_text("牛式")
+        expect(page.locator("#round-label")).to_contain_text("第 1/8 次")
+        assert page.evaluate("window.exerciseAudio.some(duration => duration > 2.5)")
+        page.clock.run_for(3000)
+        assert page.evaluate("window.exerciseAudio.at(-1)") < 1
+
+    check_cat_cow_cues()
+    for cue in ("cat_cow_cat", "cat_cow_arch", "countdown_3"):
+        assert sum(f"/{cue}." in url for url in requested) == 1
+    requested.clear()
+    page.reload()
+    check_cat_cow_cues()
+    assert requested == []

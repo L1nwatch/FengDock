@@ -66,7 +66,7 @@ test("legacy migration retains stored records, feedback, doses, levels and revie
     sessions: [{ id: "old", timestamp: start.toISOString(), records }],
   };
   const migrated = migrateStore(previous);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.equal(migrated.voiceEnabled, false);
   assert.deepEqual(migrated.sessions, previous.sessions);
   assert.deepEqual(migrated.levels, previous.levels);
@@ -280,9 +280,11 @@ test("timed steps honor bilateral totals, holds and eccentric tempo", () => {
   const store = migrateStore();
   const march = exercises.supine_march;
   const steps = buildSteps(march, schedule(store, march, start).dose);
-  assert.equal(steps.filter(({ instruction }) => instruction === "保持 2 秒").length, 16);
+  assert.equal(steps.filter(({ instruction }) => instruction.endsWith("保持 2 秒")).length, 16);
   assert.match(steps[1].prompt, /Left/);
-  assert.match(steps[4].prompt, /Right/);
+  assert.equal(steps[4].instruction, "换边 · 右侧");
+  assert.match(steps[5].prompt, /Right/);
+  assert.equal(steps.filter(({ phase }) => phase === "switch").length, 15);
   const curl = exercises.band_curl;
   const trial = schedule(store, curl, start).dose;
   const curlSteps = buildSteps(curl, { ...trial, tempoSeconds: 6 });
@@ -301,4 +303,55 @@ test("a retried write is idempotent and a stale plan cannot create a second rati
   assert.throws(() => saveTraining(store, exercise.id, { ...input, id: "stale" }, start), /计划已更新/);
   assert.equal(store.sessions[0].records.length, 1);
   assert.equal(store.exercises[exercise.id].positiveStreak, 1);
+});
+
+
+test("cat and cow are separate six-second phases, each with a reusable recording and countdown", () => {
+  const store = migrateStore();
+  const exercise = exercises.seated_cat_cow;
+  const steps = buildSteps(exercise, schedule(store, exercise, start).dose);
+  assert.equal(steps.length, 17);
+  assert.equal(steps[0].countDown, true);
+  for (let rep = 1; rep <= 8; rep += 1) {
+    const phasePair = steps.slice(2 * rep - 1, 2 * rep + 1);
+    assert.deepEqual(phasePair.map(({ duration, countDown, audioCue }) => [duration, countDown, audioCue]), [
+      [6, true, "cat_cow_cat"], [6, true, "cat_cow_arch"],
+    ]);
+    for (const phase of phasePair) assert.match(phase.roundLabel, new RegExp(`第 ${rep}/8 次`));
+  }
+});
+
+test("bilateral and directional work is separated by a timed transition", () => {
+  const store = migrateStore();
+  for (const id of ["serratus_punch", "wall_slide", "shoulder_rolls", "band_curl"]) {
+    const exercise = exercises[id];
+    const { dose } = schedule(store, exercise, start);
+    const steps = buildSteps(exercise, dose);
+    const transition = steps.findIndex(({ phase }) => phase === "switch");
+    const [left, right] = exercise.sides;
+    assert.ok(transition > 1);
+    assert.ok(steps.slice(1, transition).every(({ instruction }) => instruction.startsWith(left.label)));
+    assert.ok(steps.slice(transition + 1).every(({ instruction }) => instruction.startsWith(right.label)));
+    assert.equal(steps[transition].instruction, `${exercise.directional ? "换向" : "换边"} · ${right.label}`);
+    assert.equal(steps[transition].countDown, true);
+  }
+});
+
+test("guide timing migration updates the planned cat-cow without rewriting past doses or streaks", () => {
+  const previous = migrateStore();
+  previous.version = 3;
+  const exercise = exercises.seated_cat_cow;
+  previous.exercises[exercise.id].tempoSeconds = 6;
+  const { id } = submit(previous, exercise, start);
+  const next = migrateStore(previous, addDays(start, 1));
+  assert.equal(next.exercises[exercise.id].tempoSeconds, 12);
+  assert.equal(next.exercises[exercise.id].positiveStreak, 1);
+  assert.equal(next.exercises[exercise.id].level, 1);
+  assert.equal(latestFeedback(next, exercise.id).id, id);
+  assert.equal(latestFeedback(next, exercise.id).prescribed_dose.tempoSeconds, 6);
+  assert.equal(latestFeedback(next, exercise.id).feedback, "+");
+  assert.equal(next.changes.at(-1).type, "guideTempo");
+  assert.equal(migrateStore(next).changes.length, 1);
+  undoFeedback(next, exercise.id, id, addDays(start, 1));
+  assert.equal(next.exercises[exercise.id].tempoSeconds, 12);
 });

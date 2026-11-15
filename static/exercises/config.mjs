@@ -17,8 +17,8 @@ const daily = { sets: 1, holdSeconds: 0, daysPerWeek: 7, resistanceLevel: 0, tem
 const increaseReps = (max) => ({ field: "reps", max, rate: 0.1 });
 const increase = (field, max) => ({ field, max, step: 1 });
 const sides = [
-  { label: "左侧", prompt: "Left side" },
-  { label: "右侧", prompt: "Right side" },
+  { label: "左侧", prompt: "Left side", restCue: "side_plank_rest_left" },
+  { label: "右侧", prompt: "Right side", restCue: "side_plank_rest_right" },
 ];
 
 export const EXERCISES = [
@@ -26,8 +26,11 @@ export const EXERCISES = [
     id: "seated_cat_cow", group: "back", name: "Seated Cat-Cow", chineseName: "坐姿猫牛式",
     purpose: "腰背活动", cue: "坐稳，双脚踩地。在舒适范围内缓慢拱背，再轻抬胸口。",
     setup: "Sit with both feet on the floor.",
-    movement: "缓慢拱背，再轻抬胸口", prompt: "Round and gently lift.",
-    initial: { ...daily, reps: 8, tempoSeconds: 6 }, minimum: { reps: 5 },
+    phases: [
+      { instruction: "猫式 · 缓慢拱背", prompt: "Cat. Slowly round your back.", audioCue: "cat_cow_cat", tone: "cat" },
+      { instruction: "牛式 · 轻抬胸口", prompt: "Cow. Gently lift your chest.", audioCue: "cat_cow_arch", tone: "cow" },
+    ],
+    initial: { ...daily, reps: 8, tempoSeconds: 12 }, minimum: { reps: 5 },
     progression: [increaseReps(14)],
   },
   {
@@ -51,7 +54,7 @@ export const EXERCISES = [
     id: "shoulder_rolls", group: "shoulder", name: "Shoulder Rolls", chineseName: "肩部绕环",
     purpose: "肩部活动与放松", cue: "放松双臂，在舒适的小幅度内轻轻绕环。",
     setup: "Relax your arms by your sides.",
-    movement: "轻轻绕环", prompt: "Roll gently.",
+    movement: "轻轻绕环", prompt: "Roll gently.", directional: true,
     sides: [{ label: "向前", prompt: "Forward" }, { label: "向后", prompt: "Backward" }],
     initial: { ...daily, reps: 5 }, minimum: { reps: 3 },
     progression: [increase("reps", 10)],

@@ -1,13 +1,11 @@
-import { EXERCISES, GROUPS } from "./config.mjs";
-import { buildSteps } from "./guide.mjs";
+import { EXERCISES, GROUPS } from "./config.mjs?v=4";
+import { buildSteps } from "./guide.mjs?v=4";
+import { createGuideAudio } from "./audio.mjs";
 import {
   STORAGE_KEY, FEEDBACK_LABELS, migrateStore, addDays, dayKey, schedule, saveTraining,
   latestFeedback, recoveryAvailable, confirmRecovery, undoFeedback, resumeExercise, updateResistance,
   confirmedStreak, canReportWorse, canReplaceFeedback, replaceFeedback,
-} from "./training.mjs";
-
-const AUDIO_BASE_URL = "/static/exercises/audio";
-const AUDIO_MANIFEST_URL = `${AUDIO_BASE_URL}/manifest.json`;
+} from "./training.mjs?v=4";
 
 const views = {
   home: document.getElementById("home-view"),
@@ -70,11 +68,7 @@ let workout = null;
 let timerId = null;
 let wakeLock = null;
 let toastTimer = null;
-let audioManifest = null;
-let activeAudio = null;
-const countdownAudio = new Audio();
-countdownAudio.preload = "auto";
-const audioCache = new Map();
+const guideAudio = createGuideAudio();
 
 function loadStore() {
   return migrateStore(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") ?? {});
@@ -157,6 +151,7 @@ function changeLabel(change) {
   if (change.type === "resistanceReady") return "当前阻力下已达到计划训练量，可以确认更高阻力";
   if (change.type === "maintenance") return "已进入维护";
   if (change.type === "undo") return "已撤销反馈及由此产生的调整";
+  if (change.type === "guideTempo") return `猫式和牛式各 ${change.after.tempoSeconds / 2} 秒`;
   const values = change.fields.filter((field) => field !== "resistanceNote").map((field) =>
     `${PARAMETER_LABELS[field]} ${change.before[field]} → ${change.after[field]}`,
   );
@@ -371,6 +366,10 @@ function startWorkout(plan, manual) {
   if (manual) {
     renderExerciseFeedback();
   } else {
+    if (store.voiceEnabled) {
+      guideAudio.unlock();
+      guideAudio.preload(plan.flatMap((item) => item.steps.map((step) => step.audioCue).filter(Boolean)));
+    }
     showView("workout");
     requestWakeLock();
     enterCurrentStep();
@@ -392,8 +391,9 @@ function enterCurrentStep() {
   workout.deadline = Date.now() + workout.remainingMs;
   workout.nextCountdownSecond = 3;
   renderWorkout();
-  speak(step.audioCue, step.prompt);
-  preloadNextCue();
+  speak(step.audioCue, step.prompt, {
+    tone: step.tone, windowSeconds: step.duration - (step.countDown ? 3 : 0),
+  });
   vibrate(step.phase === "work" ? [60] : [35, 40, 35]);
   timerId = window.setInterval(tickTimer, 100);
 }
@@ -412,8 +412,7 @@ function tickTimer() {
     && countdownSecond <= workout.nextCountdownSecond
   ) {
     workout.nextCountdownSecond = countdownSecond - 1;
-    const spokenNumber = ["", "One.", "Two.", "Three."][countdownSecond];
-    speakCountdown(`countdown_${countdownSecond}`, spokenNumber);
+    if (store.voiceEnabled) guideAudio.countdown(countdownSecond);
   }
 
   if (workout.remainingMs <= 0) {
@@ -445,7 +444,7 @@ function completeCurrentExercise(manual = false) {
   result.completed = manual || result.completedWorkSteps === result.totalWorkSteps;
   clearTimer();
   releaseWakeLock();
-  speak("exercise_complete", "How did that feel?");
+  speak("exercise_complete", "How did that feel?", { tone: "done" });
   vibrate([80, 70, 120]);
   renderExerciseFeedback();
 }
@@ -461,6 +460,7 @@ function togglePause() {
     workout.deadline = Date.now() + workout.remainingMs;
     elements.pauseLabel.textContent = "暂停";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "Ⅱ";
+    if (store.voiceEnabled) guideAudio.unlock();
     speak("resumed", "Let's continue.");
     timerId = window.setInterval(tickTimer, 100);
   } else {
@@ -469,8 +469,7 @@ function togglePause() {
     clearTimer();
     elements.pauseLabel.textContent = "继续";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "▶";
-    stopVoice();
-    speak("paused", "Paused. Take your time.", { interrupt: false });
+    speak("paused", "Paused. Take your time.");
   }
   renderWorkout();
 }
@@ -487,7 +486,8 @@ function renderWorkout() {
   const priorSteps = workout.plan.slice(0, workout.exerciseIndex).reduce((sum, planItem) => sum + planItem.steps.length, 0);
   const progress = ((priorSteps + workout.stepIndex) / totalSteps) * 100;
   elements.workoutProgress.style.width = `${Math.max(2, progress)}%`;
-  elements.phaseBadge.textContent = phaseLabels[step.phase];
+  elements.phaseBadge.textContent = step.phase === "switch" && item.exercise.directional
+    ? "换向" : phaseLabels[step.phase];
   elements.phaseBadge.dataset.phase = step.phase;
   elements.roundLabel.textContent = step.roundLabel;
   elements.exercisePurpose.textContent = item.exercise.purpose;
@@ -531,7 +531,7 @@ function renderExerciseFeedback(negative = false) {
 function saveFeedback(event) {
   event.preventDefault();
   const value = event.submitter?.value;
-  if (value === "+" || value === "0") submitResult(value);
+  if (value === "+") submitResult("+");
   else if (value === "difficulty" || value === "symptoms") submitResult("-", value);
 }
 
@@ -546,6 +546,7 @@ async function submitResult(feedback, reason) {
     completed: Boolean(feedback && result.completed), attempted, dose, feedback, reason };
   current.saving = true;
   clearTimer();
+  guideAudio.stop();
   for (const control of elements.feedbackForm.querySelectorAll("button")) control.disabled = true;
 
   try {
@@ -716,14 +717,19 @@ function showView(name) {
 }
 
 async function toggleVoice() {
+  if (!store.voiceEnabled) guideAudio.unlock();
   try {
     await updateStore((next) => { next.voiceEnabled = !next.voiceEnabled; });
   } catch (error) {
     displayError(error);
     return;
   }
-  if (!store.voiceEnabled) stopVoice();
-  else speak("voice_enabled", "Audio guidance is on.");
+  if (store.voiceEnabled) {
+    guideAudio.preload();
+    speak("voice_enabled", "Audio guidance is on.");
+  } else {
+    guideAudio.stop();
+  }
   updateVoiceButton();
 }
 
@@ -733,103 +739,8 @@ function updateVoiceButton() {
   elements.voiceToggle.querySelector(".icon-button__label").textContent = store.voiceEnabled ? "语音开" : "语音关";
 }
 
-function speak(cueId, fallbackText, { interrupt = true } = {}) {
-  if (!store.voiceEnabled || !fallbackText) return;
-  if (interrupt) stopVoice();
-
-  const audio = getCueAudio(cueId);
-  if (!audio) {
-    speakFallback(fallbackText, { interrupt: false });
-    return;
-  }
-
-  activeAudio = audio;
-  audio.currentTime = 0;
-  audio.play().catch(() => {
-    if (activeAudio === audio) activeAudio = null;
-    speakFallback(fallbackText, { interrupt: false });
-  });
-}
-
-function speakCountdown(cueId, fallbackText) {
-  if (!store.voiceEnabled || !fallbackText) return;
-  const cue = audioManifest?.cues?.[cueId];
-  if (!cue?.file) {
-    speakFallback(fallbackText, { interrupt: false });
-    return;
-  }
-
-  countdownAudio.pause();
-  countdownAudio.src = `${AUDIO_BASE_URL}/${cue.file}`;
-  countdownAudio.currentTime = 0;
-  countdownAudio.play().catch(() => {
-    speakFallback(fallbackText, { interrupt: false });
-  });
-}
-
-function speakFallback(text, { interrupt = true } = {}) {
-  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
-  if (interrupt) window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  utterance.rate = 0.92;
-  utterance.pitch = 1;
-  const voices = window.speechSynthesis.getVoices();
-  const englishVoice = voices.find((voice) => /^en[-_]US/i.test(voice.lang))
-    || voices.find((voice) => /^en[-_]/i.test(voice.lang));
-  if (englishVoice) utterance.voice = englishVoice;
-  window.speechSynthesis.speak(utterance);
-}
-
-async function loadAudioManifest() {
-  try {
-    const response = await fetch(AUDIO_MANIFEST_URL, { cache: "no-store" });
-    if (!response.ok) return null;
-    audioManifest = await response.json();
-    ["countdown_3", "countdown_2", "countdown_1"].forEach(preloadCue);
-    return audioManifest;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function getCueAudio(cueId) {
-  const cue = audioManifest?.cues?.[cueId];
-  if (!cue?.file) return null;
-  if (!audioCache.has(cueId)) {
-    const audio = new Audio(`${AUDIO_BASE_URL}/${cue.file}`);
-    audio.preload = "auto";
-    audio.addEventListener("ended", () => {
-      if (activeAudio === audio) activeAudio = null;
-    });
-    audioCache.set(cueId, audio);
-  }
-  return audioCache.get(cueId);
-}
-
-function preloadCue(cueId) {
-  const audio = getCueAudio(cueId);
-  if (audio) audio.load();
-}
-
-function preloadNextCue() {
-  if (!workout) return;
-  const currentItem = workout.plan[workout.exerciseIndex];
-  const nextStep = currentItem.steps[workout.stepIndex + 1];
-  const nextExercise = workout.plan[workout.exerciseIndex + 1];
-  const cueId = nextStep?.audioCue || nextExercise?.steps[0]?.audioCue;
-  if (cueId) preloadCue(cueId);
-}
-
-function stopVoice() {
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.currentTime = 0;
-    activeAudio = null;
-  }
-  countdownAudio.pause();
-  countdownAudio.currentTime = 0;
-  window.speechSynthesis?.cancel();
+function speak(cueId, text, options) {
+  if (store.voiceEnabled) guideAudio.play(cueId, text, options);
 }
 
 function vibrate(pattern) {
@@ -920,7 +831,7 @@ elements.confirmExit.addEventListener("click", async () => {
   workout.saving = true;
   clearTimer();
   releaseWakeLock();
-  stopVoice();
+  guideAudio.stop();
   try {
     await closeSession("partial");
   } catch (error) {
@@ -981,11 +892,12 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("storage", (event) => {
   if (event.key !== STORAGE_KEY || !refreshStore()) return;
+  if (!store.voiceEnabled) guideAudio.stop();
   const active = workout?.plan[workout.exerciseIndex];
   if (active && !workout.saving && !workout.correction && store.exercises[active.exercise.id].status === "paused") {
     clearTimer();
     releaseWakeLock();
-    stopVoice();
+    guideAudio.stop();
     workout = null;
     if (elements.confirmDialog.open) elements.confirmDialog.close();
     showView("home");
@@ -1000,6 +912,7 @@ window.setInterval(() => {
 window.addEventListener("beforeunload", () => {
   clearTimer();
   releaseWakeLock();
+  guideAudio.stop();
 });
 
 if (refreshStore()) {
@@ -1010,4 +923,7 @@ if (refreshStore()) {
 }
 showView("home");
 renderHome();
-loadAudioManifest();
+if (store.voiceEnabled) {
+  guideAudio.preload();
+  guideAudio.preload(EXERCISES.flatMap((exercise) => (exercise.phases ?? []).map(({ audioCue }) => audioCue)));
+}
