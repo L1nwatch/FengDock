@@ -2,12 +2,23 @@ const AUDIO_FOLDER = "/static/exercises/audio";
 const CACHE_NAME = "fengdock-exercise-clips";
 const CACHE_STORE = "clips";
 const NOTES = { ready: 523, start: 660, cat: 440, cow: 587, switch: 784, rest: 392, done: 880 };
-const COUNTDOWN = ["", "One.", "Two.", "Three."];
-const COMMON_CUES = [
-  "countdown_3", "countdown_2", "countdown_1", "switch_sides",
-  "paused", "resumed", "exercise_complete", "exercise_skipped", "feedback_good", "feedback_bad",
-  "voice_enabled",
-];
+// TTS clips can start or end with silence longer than a countdown beat.
+function trimClip(buffer) {
+  let first = buffer.length;
+  let last = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const samples = buffer.getChannelData(channel);
+    for (let index = 0; index < samples.length; index += 1) {
+      if (Math.abs(samples[index]) < 0.008) continue;
+      first = Math.min(first, index);
+      last = Math.max(last, index);
+    }
+  }
+  const margin = Math.round(0.035 * buffer.sampleRate);
+  const start = first <= last ? Math.max(0, first - margin) : 0;
+  const end = first <= last ? Math.min(buffer.length, last + margin + 1) : buffer.length;
+  return { buffer, offset: start / buffer.sampleRate, duration: (end - start) / buffer.sampleRate };
+}
 
 function openClipCache() {
   return new Promise((resolve) => {
@@ -31,17 +42,6 @@ function accessClipCache(database, mode, operation) {
   }).catch(() => undefined);
 }
 
-function speakOnDevice(text) {
-  if (!text || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
-  const utterance = new window.SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  const voices = window.speechSynthesis.getVoices();
-  const local = voices.find((voice) => voice.localService && /^en[-_]US/i.test(voice.lang))
-    ?? voices.find((voice) => voice.localService && /^en[-_]/i.test(voice.lang));
-  if (local) utterance.voice = local;
-  window.speechSynthesis.speak(utterance);
-}
-
 export function createGuideAudio() {
   const clips = new Map();
   const playing = new Set();
@@ -49,6 +49,7 @@ export function createGuideAudio() {
   let manifestRequest;
   let cacheRequest;
   let cues;
+  let playback = 0;
 
   async function readClips() {
     const result = await fetch(`${AUDIO_FOLDER}/manifest.json`, { cache: "no-cache" });
@@ -73,24 +74,28 @@ export function createGuideAudio() {
   }
 
   function decode(clip) {
-    if (!context || clip.decoding) return;
-    clip.decoding = clip.bytes.then((bytes) => context.decodeAudioData(bytes))
-      .then((buffer) => { clip.buffer = buffer; })
+    if (!context) return;
+    return clip.decoding ??= clip.bytes.then((bytes) => context.decodeAudioData(bytes))
+      .then((buffer) => { clip.audio = trimClip(buffer); })
       .catch(() => {});
   }
 
-  async function preload(ids = COMMON_CUES) {
+  function clipFor(id) {
+    return clips.get(cues?.[id]?.file)?.audio;
+  }
+
+  async function preload(ids) {
     await (manifestRequest ??= readClips().catch(() => { manifestRequest = undefined; }));
-    for (const id of new Set(ids)) {
-      const file = cues?.[id]?.file;
-      if (!file) continue;
+    const files = new Set((ids ?? Object.keys(cues ?? {})).map((id) => cues?.[id]?.file).filter(Boolean));
+    await Promise.all([...files].map(async (file) => {
       if (!clips.has(file)) {
         const clip = { bytes: readClip(file) };
         clips.set(file, clip);
         clip.bytes.catch(() => { clips.delete(file); });
       }
-      decode(clips.get(file));
-    }
+      const clip = clips.get(file);
+      await (decode(clip) ?? clip.bytes.catch(() => {}));
+    }));
   }
 
   function unlock() {
@@ -101,21 +106,20 @@ export function createGuideAudio() {
       if (context.state !== "running") context.resume().catch(() => {});
       for (const clip of clips.values()) decode(clip);
     } catch {
-      // Device speech remains available when Web Audio is unavailable.
+      // The on-screen timer remains usable without an audio device.
     }
   }
 
   function stop() {
+    playback += 1;
     for (const source of playing) source.stop();
     playing.clear();
-    window.speechSynthesis?.cancel();
   }
 
-  function start(source, time, end) {
+  function start(source, time, ...range) {
     source.addEventListener("ended", () => playing.delete(source), { once: true });
     playing.add(source);
-    source.start(time);
-    if (end !== undefined) source.stop(end);
+    source.start(time, ...range);
   }
 
   function beep(frequency) {
@@ -127,31 +131,49 @@ export function createGuideAudio() {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
     oscillator.connect(gain);
     gain.connect(context.destination);
-    start(oscillator, time, time + 0.11);
+    start(oscillator, time);
+    oscillator.stop(time + 0.11);
   }
 
-  function play(id, text, { tone, windowSeconds, countdown } = {}) {
-    stop();
-    if (tone && context) beep(NOTES[tone]);
-    const buffer = clips.get(cues?.[id]?.file)?.buffer;
-    if (buffer && context?.state === "running") {
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      const delay = tone ? 0.1 : 0;
-      if (windowSeconds > delay + 0.1) {
-        source.playbackRate.value = Math.max(1, buffer.duration / (windowSeconds - delay - 0.1));
-      }
-      source.connect(context.destination);
-      start(source, context.currentTime + delay);
-    } else {
-      if (id) preload([id]);
-      if (countdown && context?.state === "running") beep(880 - countdown * 80);
-      else speakOnDevice(text);
+  function playClip(clip, delay, windowSeconds) {
+    const source = context.createBufferSource();
+    source.buffer = clip.buffer;
+    if (windowSeconds > delay + 0.1) {
+      source.playbackRate.value = Math.max(1, clip.duration / (windowSeconds - delay - 0.1));
     }
+    source.connect(context.destination);
+    start(source, context.currentTime + delay, clip.offset, clip.duration);
+  }
+
+  function play(id, { tone, windowSeconds, countdown } = {}) {
+    stop();
+    if (!context) return;
+    if (tone) beep(NOTES[tone]);
+    if (!id) return;
+    const clip = clipFor(id);
+    if (clip && context.state === "running") {
+      playClip(clip, tone ? 0.1 : 0, windowSeconds);
+      return;
+    }
+    if (countdown) {
+      beep(880 - countdown * 80);
+      preload([id]);
+      return;
+    }
+    // A cold-start clip may arrive just after the user presses Start.
+    const thisPlayback = playback;
+    const requestedAt = performance.now();
+    preload([id]).then(() => {
+      const elapsed = (performance.now() - requestedAt) / 1000;
+      const ready = clipFor(id);
+      if (thisPlayback === playback && ready && elapsed <= 0.6 && context.state === "running") {
+        playClip(ready, 0, windowSeconds - elapsed);
+      }
+    });
   }
 
   return {
     preload, unlock, play, stop,
-    countdown: (second) => play(`countdown_${second}`, COUNTDOWN[second], { countdown: second }),
+    countdown: (second) => play(`countdown_${second}`, { countdown: second, windowSeconds: 1 }),
   };
 }

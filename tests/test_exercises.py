@@ -212,11 +212,12 @@ def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
             };
             const start = AudioBufferSourceNode.prototype.start;
             AudioBufferSourceNode.prototype.start = function (...args) {
-                window.exerciseAudio.push(this.buffer.duration);
+                window.exerciseAudio.push((args[2] ?? this.buffer.duration) / this.playbackRate.value);
                 return start.apply(this, args);
             };
         }"""
     )
+    clip_count = len(client.get("/static/exercises/audio/manifest.json").json()["cues"])
     requested = []
     page.on("request", lambda request: requested.append(request.url) if request.url.endswith(".mp3") else None)
     with page.expect_response(lambda response: "/cat_cow_arch." in response.url):
@@ -240,7 +241,7 @@ def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
 
     def check_cat_cow_cues():
         page.locator('[data-exercise="seated_cat_cow"]').get_by_role("button", name="开始引导").click()
-        page.wait_for_function("window.exerciseClipsDecoded >= 5")
+        page.wait_for_function("count => window.exerciseClipsDecoded === count", arg=clip_count)
         page.clock.run_for(8100)
         expect(page.locator("#step-instruction")).to_contain_text("猫式")
         expect(page.locator("#round-label")).to_contain_text("第 1/8 次")
@@ -251,7 +252,7 @@ def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
         page.clock.run_for(1000)
         expect(page.locator("#step-instruction")).to_contain_text("牛式")
         expect(page.locator("#round-label")).to_contain_text("第 1/8 次")
-        assert page.evaluate("window.exerciseAudio.some(duration => duration > 2.5)")
+        assert page.evaluate("window.exerciseAudio.at(-1)") > 1
         page.clock.run_for(3000)
         assert page.evaluate("window.exerciseAudio.at(-1)") < 1
 
@@ -262,3 +263,28 @@ def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
     page.reload()
     check_cat_cow_cues()
     assert requested == []
+
+
+    page.reload()
+    wall = page.locator('[data-exercise="wall_slide"]')
+    wall.get_by_role("button", name="开始引导").click()
+    page.wait_for_function("count => window.exerciseClipsDecoded === count", arg=clip_count)
+    page.clock.run_for(8100)
+    expect(page.locator("#step-instruction")).to_contain_text("手沿墙上滑")
+    before = page.evaluate("window.exerciseAudio.length")
+    page.clock.run_for(4000)
+    countdown = page.evaluate("start => window.exerciseAudio.slice(start)", before)
+    assert len(countdown) == 3 and all(length < 1 for length in countdown)
+
+    page.reload()
+    march = page.locator('[data-exercise="supine_march"]')
+    march.get_by_role("button", name="开始引导").click()
+    advance = page.locator("#skip-step-button")
+    advance.click()
+    expect(page.locator("#step-instruction")).to_contain_text("左侧 · 轻抬一脚")
+    advance.click()
+    expect(page.locator("#step-instruction")).to_contain_text("左侧 · 保持 2 秒")
+    advance.click()
+    expect(page.locator("#step-instruction")).to_contain_text("左侧 · 缓慢回位")
+    advance.click()
+    expect(page.locator("#step-instruction")).to_contain_text("右侧 · 轻抬一脚")

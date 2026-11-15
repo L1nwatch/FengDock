@@ -1,11 +1,11 @@
-import { EXERCISES, GROUPS } from "./config.mjs?v=4";
-import { buildSteps } from "./guide.mjs?v=4";
-import { createGuideAudio } from "./audio.mjs";
+import { EXERCISES, GROUPS } from "./config.mjs?v=5";
+import { buildSteps } from "./guide.mjs?v=5";
+import { createGuideAudio } from "./audio.mjs?v=5";
 import {
   STORAGE_KEY, FEEDBACK_LABELS, migrateStore, addDays, dayKey, schedule, saveTraining,
   latestFeedback, recoveryAvailable, confirmRecovery, undoFeedback, resumeExercise, updateResistance,
   confirmedStreak, canReportWorse, canReplaceFeedback, replaceFeedback,
-} from "./training.mjs?v=4";
+} from "./training.mjs?v=5";
 
 const views = {
   home: document.getElementById("home-view"),
@@ -368,7 +368,7 @@ function startWorkout(plan, manual) {
   } else {
     if (store.voiceEnabled) {
       guideAudio.unlock();
-      guideAudio.preload(plan.flatMap((item) => item.steps.map((step) => step.audioCue).filter(Boolean)));
+      guideAudio.preload();
     }
     showView("workout");
     requestWakeLock();
@@ -391,7 +391,7 @@ function enterCurrentStep() {
   workout.deadline = Date.now() + workout.remainingMs;
   workout.nextCountdownSecond = 3;
   renderWorkout();
-  speak(step.audioCue, step.prompt, {
+  speak(step.audioCue, {
     tone: step.tone, windowSeconds: step.duration - (step.countDown ? 3 : 0),
   });
   vibrate(step.phase === "work" ? [60] : [35, 40, 35]);
@@ -444,7 +444,7 @@ function completeCurrentExercise(manual = false) {
   result.completed = manual || result.completedWorkSteps === result.totalWorkSteps;
   clearTimer();
   releaseWakeLock();
-  speak("exercise_complete", "How did that feel?", { tone: "done" });
+  speak("exercise_complete", { tone: "done" });
   vibrate([80, 70, 120]);
   renderExerciseFeedback();
 }
@@ -461,7 +461,7 @@ function togglePause() {
     elements.pauseLabel.textContent = "暂停";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "Ⅱ";
     if (store.voiceEnabled) guideAudio.unlock();
-    speak("resumed", "Let's continue.");
+    speak("resumed");
     timerId = window.setInterval(tickTimer, 100);
   } else {
     workout.remainingMs = Math.max(0, workout.deadline - Date.now());
@@ -469,7 +469,7 @@ function togglePause() {
     clearTimer();
     elements.pauseLabel.textContent = "继续";
     elements.pauseButton.querySelector(".control-button__icon").textContent = "▶";
-    speak("paused", "Paused. Take your time.");
+    speak("paused");
   }
   renderWorkout();
 }
@@ -563,11 +563,10 @@ async function submitResult(feedback, reason) {
       showToast("反馈已更新");
       return;
     }
-    if (feedback === "+") speak("feedback_good", "Got it.");
-    else if (feedback === "-") speak(reason === "symptoms" ? null : "feedback_bad",
-      reason === "symptoms" ? "Movement paused." : "Got it.");
-    else speak("exercise_skipped", "Exercise skipped.");
-    await advanceToNextExercise(current);
+    if (feedback === "+") speak("feedback_good");
+    else if (feedback === "-") speak(reason === "symptoms" ? "symptom_stop" : "feedback_good");
+    else speak("exercise_skipped");
+    await advanceToNextExercise(current, reason === "symptoms" ? 1800 : 850);
   } catch (error) {
     current.saving = false;
     current.saveFailed = true;
@@ -576,7 +575,7 @@ async function submitResult(feedback, reason) {
   }
 }
 
-async function advanceToNextExercise(current) {
+async function advanceToNextExercise(current, delay = 850) {
   if (workout !== current) return;
   current.exerciseIndex += 1;
   current.stepIndex = 0;
@@ -596,7 +595,7 @@ async function advanceToNextExercise(current) {
     showView("workout");
     requestWakeLock();
     enterCurrentStep();
-  }, 850);
+  }, delay);
 }
 
 async function closeSession(status) {
@@ -726,7 +725,7 @@ async function toggleVoice() {
   }
   if (store.voiceEnabled) {
     guideAudio.preload();
-    speak("voice_enabled", "Audio guidance is on.");
+    speak("voice_enabled");
   } else {
     guideAudio.stop();
   }
@@ -739,8 +738,8 @@ function updateVoiceButton() {
   elements.voiceToggle.querySelector(".icon-button__label").textContent = store.voiceEnabled ? "语音开" : "语音关";
 }
 
-function speak(cueId, text, options) {
-  if (store.voiceEnabled) guideAudio.play(cueId, text, options);
+function speak(cueId, options) {
+  if (store.voiceEnabled) guideAudio.play(cueId, options);
 }
 
 function vibrate(pattern) {
@@ -923,7 +922,4 @@ if (refreshStore()) {
 }
 showView("home");
 renderHome();
-if (store.voiceEnabled) {
-  guideAudio.preload();
-  guideAudio.preload(EXERCISES.flatMap((exercise) => (exercise.phases ?? []).map(({ audioCue }) => audioCue)));
-}
+if (store.voiceEnabled) guideAudio.preload();

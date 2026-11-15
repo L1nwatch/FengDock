@@ -28,30 +28,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def content_hash(config: dict[str, object], text: str) -> str:
-    payload = json.dumps(
-        {
-            "model": config["model"],
-            "voice": config["voice"],
-            "response_format": config["response_format"],
-            "speed": config["speed"],
-            "text": text,
-        },
-        sort_keys=True,
-        ensure_ascii=False,
-    ).encode("utf-8")
+    payload = json.dumps(speech_payload(config, text), sort_keys=True, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
+def speech_payload(config: dict[str, object], text: str) -> dict[str, object]:
+    payload = {key: config[key] for key in ("model", "voice", "response_format", "speed")}
+    if config.get("instructions"):
+        payload["instructions"] = config["instructions"]
+    return {**payload, "input": text}
+
+
 def request_audio(api_key: str, config: dict[str, object], text: str) -> bytes:
-    body = json.dumps(
-        {
-            "model": config["model"],
-            "voice": config["voice"],
-            "input": text,
-            "response_format": config["response_format"],
-            "speed": config["speed"],
-        }
-    ).encode("utf-8")
+    body = json.dumps(speech_payload(config, text)).encode("utf-8")
     request = Request(
         SPEECH_ENDPOINT,
         data=body,
@@ -66,8 +55,7 @@ def request_audio(api_key: str, config: dict[str, object], text: str) -> bytes:
         with urlopen(request, timeout=90) as response:
             audio = response.read()
     except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Speech API returned HTTP {error.code}: {detail}") from error
+        raise RuntimeError(f"Speech API returned HTTP {error.code}") from error
     except URLError as error:
         raise RuntimeError(f"Speech API request failed: {error.reason}") from error
     if len(audio) < 256:

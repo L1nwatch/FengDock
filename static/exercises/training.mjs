@@ -1,4 +1,4 @@
-import { ARCHIVED_EXERCISES, EXERCISES, GROUPS } from "./config.mjs?v=4";
+import { ARCHIVED_EXERCISES, EXERCISES, GROUPS } from "./config.mjs?v=5";
 
 export const STORAGE_KEY = "fengdock.exercises.v1";
 const STORAGE_VERSION = 4;

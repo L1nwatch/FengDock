@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync, existsSync } from "node:fs";
 import { EXERCISES, GROUPS, ARCHIVED_EXERCISES } from "../static/exercises/config.mjs";
 import {
   addDays, confirmRecovery, latestFeedback, migrateStore, replaceFeedback, resumeExercise,
@@ -281,14 +282,12 @@ test("timed steps honor bilateral totals, holds and eccentric tempo", () => {
   const march = exercises.supine_march;
   const steps = buildSteps(march, schedule(store, march, start).dose);
   assert.equal(steps.filter(({ instruction }) => instruction.endsWith("保持 2 秒")).length, 16);
-  assert.match(steps[1].prompt, /Left/);
-  assert.equal(steps[4].instruction, "换边 · 右侧");
-  assert.match(steps[5].prompt, /Right/);
-  assert.equal(steps.filter(({ phase }) => phase === "switch").length, 15);
+  assert.deepEqual(steps.slice(1, 5).map(({ audioCue }) => audioCue), ["left", undefined, "lower", "right"]);
+  assert.equal(steps.filter(({ phase }) => phase === "switch").length, 0);
   const curl = exercises.band_curl;
   const trial = schedule(store, curl, start).dose;
   const curlSteps = buildSteps(curl, { ...trial, tempoSeconds: 6 });
-  assert.equal(curlSteps.filter(({ prompt, duration }) => prompt === "Lower." && duration === 4).length, 6);
+  assert.equal(curlSteps.filter(({ audioCue, duration }) => audioCue === "lower" && duration === 4).length, 6);
 });
 
 test("a retried write is idempotent and a stale plan cannot create a second rating", () => {
@@ -354,4 +353,38 @@ test("guide timing migration updates the planned cat-cow without rewriting past 
   assert.equal(migrateStore(next).changes.length, 1);
   undoFeedback(next, exercise.id, id, addDays(start, 1));
   assert.equal(next.exercises[exercise.id].tempoSeconds, 12);
+});
+
+
+test("wall slides count down each rep and hold steps omit spoken prompts", () => {
+  const wall = exercises.wall_slide;
+  const reps = buildSteps(wall, wall.initial).filter(({ phase }) => phase === "work");
+  assert.equal(reps.length, 16);
+  assert.ok(reps.every(({ countDown, duration }) => countDown && duration === 5));
+  for (const id of ["glute_bridge", "supine_march", "serratus_punch"]) {
+    const exercise = exercises[id];
+    const steps = buildSteps(exercise, { ...exercise.initial, holdSeconds: 4 });
+    const holds = steps.filter(({ instruction }) => instruction.endsWith("保持 4 秒"));
+    assert.ok(holds.length);
+    assert.ok(holds.every(({ audioCue, countDown }) => !audioCue && countDown));
+  }
+});
+
+test("every guided step references a generated clip or intentionally uses only a tone", () => {
+  const audio = new URL("../static/exercises/audio/", import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL("manifest.json", audio)));
+  const promptPack = JSON.parse(readFileSync(new URL("prompts.json", audio)));
+  assert.equal(manifest.model, "gpt-4o-mini-tts");
+  assert.deepEqual(Object.keys(manifest.cues), Object.keys(promptPack.cues));
+  for (const [id, cue] of Object.entries(manifest.cues)) {
+    assert.equal(cue.text, promptPack.cues[id]);
+    assert.ok(existsSync(new URL(cue.file, audio)), id);
+  }
+  for (const exercise of EXERCISES) {
+    for (const dose of [{ ...exercise.initial, sets: 2 }, ...(exercise.trial ? [{ ...exercise.initial, ...exercise.trial, trial: true }] : [])]) {
+      for (const step of buildSteps(exercise, dose)) {
+        if (step.audioCue) assert.ok(manifest.cues[step.audioCue], step.audioCue);
+      }
+    }
+  }
 });
