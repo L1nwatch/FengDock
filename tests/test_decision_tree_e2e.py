@@ -58,6 +58,7 @@ def _result(response):
 
 
 def _expect_saved(page):
+    page.clock.fast_forward(8000)
     expect(page.get_by_role("status").filter(has_text=re.compile(r"^已保存 · v\d+$"))).to_be_visible()
 
 
@@ -144,6 +145,7 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
     with _serve(full) as url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.clock.install()
         page.set_default_timeout(10000)
         page_errors = []
         page.on("pageerror", lambda error: page_errors.append(str(error)))
@@ -182,6 +184,7 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         expect(viewport).not_to_have_attribute("style", before_pan)
         canvas.get_by_role("button", name="适应画布").click()
         canvas.get_by_role("button", name="自动布局").click()
+        page.clock.fast_forward(8000)
         expect(page.get_by_text("已保存 · v2")).to_be_visible()
         before = _result(call("get_decision", ids))
 
@@ -193,6 +196,7 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         page.mouse.down()
         page.mouse.move(x + 55, y + 24, steps=12)
         page.mouse.up()
+        page.clock.fast_forward(8000)
         expect(page.get_by_text("已保存 · v3")).to_be_visible()
         moved = _result(call("get_decision", ids))
         delta = saved_node(moved, "no-draw")["positionX"] - saved_node(before, "no-draw")["positionX"]
@@ -245,6 +249,7 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         }))
         card("no-draw").get_by_role("button", name="展开分支").click()
         expect(new_node).to_be_visible()
+        page.clock.fast_forward(8000)
         expect(page.get_by_text("这条决策已更新。请重新加载最新版本后再保存。")).to_be_visible()
         expect(new_node).to_be_visible()
         page.once("dialog", lambda dialog: dialog.accept())
@@ -317,6 +322,7 @@ def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflo
     with _serve(full) as url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page()
+        page.clock.install()
         page.set_default_timeout(10000)
         page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
         label = page.get_by_role("button", name="Autosave race")
@@ -328,6 +334,7 @@ def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflo
         page.route(f"**/api/decisions/{decision_id}/tree", lambda route: blocked.append(route), times=1)
         with page.expect_request(lambda request: request.method == "PATCH"):
             text.fill("First edit")
+            page.clock.fast_forward(8000)
         expect(page.get_by_role("status")).to_contain_text("正在保存")
         text.press("Shift+Enter")
         page.keyboard.insert_text("补充中文")
@@ -337,6 +344,7 @@ def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflo
         assert len(blocked) == 1
         blocked.pop().continue_()
 
+        page.clock.fast_forward(8000)
         expect(page.get_by_role("status")).to_have_text("已保存 · v3")
         expect(text).to_be_focused()
         expect(text).to_have_value("First edit\n补充中文")
@@ -344,6 +352,7 @@ def test_inline_autosave_queues_text_while_a_write_is_in_flight(decision_workflo
         assert saved["nodes"][0]["text"] == "First edit\n补充中文"
         text.press("Escape")
         expect(label).to_be_focused()
+        page.clock.fast_forward(8000)
         expect(page.get_by_role("status")).to_have_text("已保存 · v4")
         assert api.get(f"/api/decisions/{decision_id}").json()["nodes"][0]["text"] == "Autosave race"
 
@@ -385,6 +394,7 @@ def test_growing_a_branch_keeps_it_apart_and_shares_one_connector(decision_workf
     with _serve(full) as url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.clock.install()
         page.set_default_timeout(10000)
         page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
 
@@ -436,4 +446,63 @@ def test_growing_a_branch_keeps_it_apart_and_shares_one_connector(decision_workf
             record = api.get(f"/api/decisions/{decision_id}").json()
             assert all(node["parentId"] == "a" for node in record["nodes"] if node["text"] in children)
             page.reload()
+        browser.close()
+
+
+@pytest.mark.e2e
+def test_autosave_batches_edits_and_limits_continuous_wait(decision_workflow):
+    app, api, _ = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    record = api.post("/api/decisions", json={
+        "title": "Autosave cadence",
+        "nodes": [{"id": "root", "text": "Start", "positionX": 0, "positionY": 0}],
+    }).json()
+    decision_id = record["id"]
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    def latest():
+        return api.get(f"/api/decisions/{decision_id}").json()
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.clock.install()
+        page.goto(f"{url}/conclusion/decision-trees/{decision_id}")
+        status = page.get_by_role("status")
+        text = page.get_by_role("textbox", name="节点文字")
+        page.get_by_role("button", name="Start", exact=True).press("F2")
+        text.fill("First draft")
+        page.clock.fast_forward(4000)
+        text.fill("Final draft")
+        page.clock.fast_forward(6000)
+        expect(status).to_contain_text("等待自动保存")
+        assert latest()["version"] == 1
+        page.clock.fast_forward(2000)
+        expect(status).to_have_text("已保存 · v2")
+        assert latest()["nodes"][0]["text"] == "Final draft"
+
+        text.press("Enter")
+        label = page.get_by_role("button", name="Final draft", exact=True)
+        label.press("F2")
+        text.fill("Discard this edit")
+        text.press("Escape")
+        page.clock.fast_forward(8000)
+        expect(status).to_have_text("已保存 · v2")
+
+        label.press("F2")
+        text.fill("Continuing edit 0")
+        for index in range(1, 5):
+            page.clock.fast_forward(6000)
+            text.fill(f"Continuing edit {index}")
+        page.clock.fast_forward(3000)
+        assert latest()["version"] == 2
+        page.clock.fast_forward(3000)
+        expect(status).to_have_text("已保存 · v3")
+        assert latest()["nodes"][0]["text"] == "Continuing edit 4"
+
+        page.clock.fast_forward(60000)
+        assert latest()["version"] == 3
         browser.close()
