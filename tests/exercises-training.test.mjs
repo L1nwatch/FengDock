@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync, existsSync } from "node:fs";
 import { EXERCISES, GROUPS, ARCHIVED_EXERCISES } from "../static/exercises/config.mjs";
 import {
-  addDays, confirmRecovery, latestFeedback, migrateStore, replaceFeedback, resumeExercise,
+  addDays, latestFeedback, migrateStore, replaceFeedback, resumeExercise,
   saveTraining, schedule, setsForSlot, undoFeedback, updateResistance,
 } from "../static/exercises/training.mjs";
 import { buildSteps } from "../static/exercises/guide.mjs";
@@ -23,22 +23,17 @@ function submit(store, exercise, time, feedback = "+", options = {}) {
   return { id, result };
 }
 
-function recover(store, exercise, id, time, outcome = "ok") {
-  return confirmRecovery(store, exercise.id, id, outcome, addDays(time, 1));
-}
-
 function positiveRun(store, exercise, date) {
   let last;
   for (let count = 0; count < GROUPS[exercise.group].positiveTarget; count += 1) {
     const time = schedule(store, exercise, date).next;
-    const entry = submit(store, exercise, time);
-    last = recover(store, exercise, entry.id, time);
+    last = submit(store, exercise, time).result;
     date = addDays(time, 1);
   }
   return { date, change: last };
 }
 
-test("initial plans have seven independent doses and a limited curl tolerance trial", () => {
+test("initial plans have seven independent doses and a formal first curl", () => {
   const store = migrateStore();
   assert.deepEqual(EXERCISES.map(({ id, group }) => [id, group]), [
     ["seated_cat_cow", "back"], ["glute_bridge", "back"], ["supine_march", "back"],
@@ -54,7 +49,7 @@ test("initial plans have seven independent doses and a limited curl tolerance tr
   ]);
   for (const exercise of EXERCISES) assert.equal(schedule(store, exercise, start).due, true);
   const { dose } = schedule(store, exercises.band_curl, start);
-  assert.deepEqual([dose.trial, dose.sets, dose.reps], [true, 1, 3]);
+  assert.deepEqual([dose.sets, dose.reps], [2, 8]);
 });
 
 test("legacy migration retains stored records, feedback, doses, levels and review flags", () => {
@@ -67,7 +62,7 @@ test("legacy migration retains stored records, feedback, doses, levels and revie
     sessions: [{ id: "old", timestamp: start.toISOString(), records }],
   };
   const migrated = migrateStore(previous);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.voiceEnabled, false);
   assert.deepEqual(migrated.sessions, previous.sessions);
   assert.deepEqual(migrated.levels, previous.levels);
@@ -82,7 +77,6 @@ test("all seven can progress past L100 with no changes to their configured bound
     const store = migrateStore();
     const state = store.exercises[exercise.id];
     state.level = 100;
-    state.trialComplete = true;
     const { change } = positiveRun(store, exercise, start);
     assert.deepEqual(change.fields, ["reps"], exercise.id);
     assert.equal(state.level, 101, exercise.id);
@@ -95,35 +89,26 @@ test("all seven can progress past L100 with no changes to their configured bound
   }
 });
 
-test("missing, early or closely spaced recovery cannot promote an exercise", () => {
+test("positive feedback advances the plan directly and still requires eligible intervals", () => {
   const store = migrateStore();
   const exercise = exercises.seated_cat_cow;
-  let date = start;
-  for (let day = 0; day < 7; day += 1) {
-    const { id } = submit(store, exercise, date);
-    assert.throws(() => confirmRecovery(store, exercise.id, id, "ok", date), /次日/);
-    if (day !== 2) recover(store, exercise, id, date);
+  const yesterdayNight = new Date(2026, 1, 1, 23);
+  submit(store, exercise, yesterdayNight);
+  let date = new Date(2026, 1, 2, 7);
+  submit(store, exercise, date);
+  assert.equal(latestFeedback(store, exercise.id).eligible, false);
+  for (let day = 0; day < 6; day += 1) {
     date = addDays(date, 1);
+    assert.equal(submit(store, exercise, date).result, null);
   }
   assert.equal(store.exercises[exercise.id].level, 1);
-  assert.equal(store.exercises[exercise.id].positiveStreak, 7);
-  for (let day = 0; day < 3; day += 1) {
-    const { id } = submit(store, exercise, date);
-    recover(store, exercise, id, date);
-    date = addDays(date, 1);
-  }
+  const { result } = submit(store, exercise, addDays(date, 1));
+  assert.equal(result.type, "up");
   assert.equal(store.exercises[exercise.id].level, 2);
-
-  const nextStore = migrateStore();
-  const yesterdayNight = new Date(2026, 1, 1, 23);
-  submit(nextStore, exercise, yesterdayNight);
-  const nextMorning = new Date(2026, 1, 2, 7);
-  assert.equal(schedule(nextStore, exercise, nextMorning).due, true);
-  submit(nextStore, exercise, nextMorning);
-  assert.equal(latestFeedback(nextStore, exercise.id).eligible, false);
+  assert.equal(latestFeedback(store, exercise.id).recovery, undefined);
 });
 
-test("neutral resets the streak, true skips preserve it, difficulty reduces one field and symptoms pause", () => {
+test("skipping preserves the streak and a single negative pauses without changing the dose", () => {
   const store = migrateStore();
   const exercise = exercises.glute_bridge;
   submit(store, exercise, start);
@@ -131,18 +116,16 @@ test("neutral resets the streak, true skips preserve it, difficulty reduces one 
   submit(store, exercise, second, null, { attempted: false, completed: false });
   assert.equal(schedule(store, exercise, second).due, true);
   assert.equal(store.exercises[exercise.id].positiveStreak, 1);
-  submit(store, exercise, second, "0");
+  const { result } = submit(store, exercise, second, "-");
+  assert.deepEqual(result.fields, []);
+  assert.equal(result.type, "paused");
   assert.equal(store.exercises[exercise.id].positiveStreak, 0);
-  const { result } = submit(store, exercise, addDays(start, 4), "-", { reason: "difficulty" });
-  assert.deepEqual(result.fields, ["holdSeconds"]);
-  assert.equal(result.after.holdSeconds, 1);
-  assert.equal(result.before.level, result.after.level);
-  const painDay = addDays(start, 5);
-  submit(store, exercise, painDay, "-", { reason: "symptoms", completed: false });
-  assert.equal(store.exercises[exercise.id].status, "paused");
-  assert.equal(schedule(store, exercise, addDays(painDay, 1)).due, false);
-  resumeExercise(store, exercise.id, addDays(painDay, 1));
-  assert.equal(schedule(store, exercise, addDays(painDay, 1)).due, true);
+  assert.equal(result.after.holdSeconds, result.before.holdSeconds);
+  assert.equal(result.after.level, result.before.level);
+  const third = addDays(second, 1);
+  assert.equal(schedule(store, exercise, third).due, false);
+  resumeExercise(store, exercise.id, third);
+  assert.equal(schedule(store, exercise, third).due, true);
 });
 
 test("bridge and march individually increase hold, then sets, then maintain", () => {
@@ -169,24 +152,27 @@ test("bridge and march individually increase hold, then sets, then maintain", ()
   }
 });
 
-test("trial requires confirmed recovery before the first formal curl and preserves 48 hours", () => {
-  const store = migrateStore();
+test("older trials retain their time and history without gating formal curl sessions", () => {
   const exercise = exercises.band_curl;
-  const { id } = submit(store, exercise, start, "0");
+  const oldRecord = {
+    id: "old-trial", exercise_id: exercise.id, timestamp: start.toISOString(),
+    prescribed_dose: { trial: true, reps: 3, sets: 1 }, attempted: true, completed: true, feedback: "+",
+  };
+  const store = migrateStore({ version: 4, sessions: [{ records: [oldRecord] }] });
   const twoDays = new Date(+start + 48 * hour);
-  assert.equal(schedule(store, exercise, twoDays).waitingForTrial, true);
-  recover(store, exercise, id, start);
   assert.equal(schedule(store, exercise, new Date(+twoDays - 1)).due, false);
   const { due, dose } = schedule(store, exercise, twoDays);
   assert.equal(due, true);
-  assert.deepEqual([dose.trial, dose.sets, dose.reps, dose.resistanceLevel], [false, 2, 8, 1]);
+  assert.deepEqual([dose.sets, dose.reps, dose.resistanceLevel], [2, 8, 1]);
+  assert.equal(dose.trial, undefined);
+  assert.equal(latestFeedback(store, exercise.id), oldRecord);
 });
 
 test("curl allocates weekly sets across training days, honors delays and increases resistance only on confirmation", () => {
   const store = migrateStore();
   const exercise = exercises.band_curl;
   const state = store.exercises[exercise.id];
-  Object.assign(state, { trialComplete: true, reps: 14 });
+  Object.assign(state, { reps: 14 });
   let date = start;
   for (const expected of [5, 6]) {
     const run = positiveRun(store, exercise, date);
@@ -228,7 +214,7 @@ test("no higher resistance uses bounded eccentric tempo and maintains the existi
   const store = migrateStore();
   const exercise = exercises.band_curl;
   const state = store.exercises[exercise.id];
-  Object.assign(state, { trialComplete: true, reps: 14, daysPerWeek: 3, weeklySets: 10, level: 8 });
+  Object.assign(state, { reps: 14, daysPerWeek: 3, weeklySets: 10, level: 8 });
   assert.throws(() => updateResistance(store, "蓝色", start), /完成进阶/);
   const eligible = positiveRun(store, exercise, start);
   const fallback = updateResistance(store, null, eligible.date);
@@ -244,37 +230,26 @@ test("no higher resistance uses bounded eccentric tempo and maintains the existi
   assert.ok(cap.change);
 });
 
-test("daily crossover, delayed symptom reports, reload and correction retain the historical prescription", () => {
+test("daily crossover, reload and correction retain the historical prescription", () => {
   let store = migrateStore();
   const exercise = exercises.seated_cat_cow;
-  let date = start;
-  for (let index = 0; index < 6; index += 1) {
-    const { id } = submit(store, exercise, date);
-    recover(store, exercise, id, date);
-    date = addDays(date, 1);
-  }
-  const { id } = submit(store, exercise, date);
-  assert.equal(schedule(store, exercise, date).due, false);
+  const { date } = positiveRun(store, exercise, start);
+  const id = latestFeedback(store, exercise.id).id;
+  assert.equal(schedule(store, exercise, addDays(date, -1)).due, false);
   store = migrateStore(JSON.parse(JSON.stringify(store)));
-  assert.equal(store.exercises[exercise.id].positiveStreak, 7);
-  const tomorrow = addDays(date, 1);
-  assert.equal(schedule(store, exercise, tomorrow).due, true);
-  assert.equal(recover(store, exercise, id, date).after.reps, 9);
-  assert.equal(schedule(store, exercise, tomorrow).due, true);
-  confirmRecovery(store, exercise.id, id, "worse", new Date(+tomorrow + hour));
-  assert.equal(store.exercises[exercise.id].status, "paused");
-  assert.equal(store.exercises[exercise.id].reps, 8);
-  undoFeedback(store, exercise.id, id, new Date(+tomorrow + 2 * hour));
+  assert.equal(store.exercises[exercise.id].reps, 9);
+  assert.equal(schedule(store, exercise, date).due, true);
+  undoFeedback(store, exercise.id, id, date);
   assert.equal(store.exercises[exercise.id].positiveStreak, 6);
-  assert.equal(store.exercises[exercise.id].status, "active");
-  replaceFeedback(store, exercise.id, id, "0", null, new Date(+tomorrow + 2 * hour));
+  assert.equal(store.exercises[exercise.id].reps, 8);
+  replaceFeedback(store, exercise.id, id, "-", date);
   const record = latestFeedback(store, exercise.id);
   assert.equal(record.prescribed_dose.reps, 8);
   assert.equal(record.feedbackRevisions[0].feedback, "+");
-  assert.equal(record.feedbackRevisions[0].recovery.outcome, "worse");
-  assert.equal(record.feedback, "0");
+  assert.equal(record.feedback, "-");
   assert.equal(store.exercises[exercise.id].positiveStreak, 0);
-  assert.deepEqual(store.changes.map(({ type }) => type), ["up", "paused", "undo"]);
+  assert.equal(store.exercises[exercise.id].status, "paused");
+  assert.deepEqual(store.changes.map(({ type }) => type), ["up", "undo", "paused"]);
 });
 
 test("timed steps honor bilateral totals, holds and eccentric tempo", () => {
@@ -285,9 +260,9 @@ test("timed steps honor bilateral totals, holds and eccentric tempo", () => {
   assert.deepEqual(steps.slice(1, 5).map(({ audioCue }) => audioCue), ["left", undefined, "lower", "right"]);
   assert.equal(steps.filter(({ phase }) => phase === "switch").length, 0);
   const curl = exercises.band_curl;
-  const trial = schedule(store, curl, start).dose;
-  const curlSteps = buildSteps(curl, { ...trial, tempoSeconds: 6 });
-  assert.equal(curlSteps.filter(({ audioCue, duration }) => audioCue === "lower" && duration === 4).length, 6);
+  const dose = schedule(store, curl, start).dose;
+  const curlSteps = buildSteps(curl, { ...dose, tempoSeconds: 6 });
+  assert.equal(curlSteps.filter(({ audioCue, duration }) => audioCue === "lower" && duration === 4).length, 32);
 });
 
 test("a retried write is idempotent and a stale plan cannot create a second rating", () => {
@@ -320,18 +295,18 @@ test("cat and cow are separate six-second phases, each with a reusable recording
   }
 });
 
-test("bilateral and directional work is separated by a timed transition", () => {
+test("bilateral work is separated by a timed transition", () => {
   const store = migrateStore();
-  for (const id of ["serratus_punch", "wall_slide", "shoulder_rolls", "band_curl"]) {
+  for (const id of ["serratus_punch", "wall_slide", "band_curl"]) {
     const exercise = exercises[id];
     const { dose } = schedule(store, exercise, start);
-    const steps = buildSteps(exercise, dose);
+    const steps = buildSteps(exercise, { ...dose, sets: 1 });
     const transition = steps.findIndex(({ phase }) => phase === "switch");
     const [left, right] = exercise.sides;
     assert.ok(transition > 1);
     assert.ok(steps.slice(1, transition).every(({ instruction }) => instruction.startsWith(left.label)));
     assert.ok(steps.slice(transition + 1).every(({ instruction }) => instruction.startsWith(right.label)));
-    assert.equal(steps[transition].instruction, `${exercise.directional ? "换向" : "换边"} · ${right.label}`);
+    assert.equal(steps[transition].instruction, `换边 · ${right.label}`);
     assert.equal(steps[transition].countDown, true);
   }
 });
@@ -381,10 +356,24 @@ test("every guided step references a generated clip or intentionally uses only a
     assert.ok(existsSync(new URL(cue.file, audio)), id);
   }
   for (const exercise of EXERCISES) {
-    for (const dose of [{ ...exercise.initial, sets: 2 }, ...(exercise.trial ? [{ ...exercise.initial, ...exercise.trial, trial: true }] : [])]) {
-      for (const step of buildSteps(exercise, dose)) {
-        if (step.audioCue) assert.ok(manifest.cues[step.audioCue], step.audioCue);
-      }
+    for (const step of buildSteps(exercise, { ...exercise.initial, sets: 2 })) {
+      if (step.audioCue) assert.ok(manifest.cues[step.audioCue], step.audioCue);
     }
   }
+});
+
+test("forward and backward shoulder rolls have equal repetition lengths without an extra direction timer", () => {
+  const exercise = exercises.shoulder_rolls;
+  const steps = buildSteps(exercise, exercise.initial).slice(1);
+  assert.equal(steps.length, 10);
+  assert.ok(steps.every(({ phase, duration, countDown }) => phase === "work" && duration === 4 && countDown));
+  assert.equal(steps[0].audioCue, "forward");
+  assert.equal(steps[5].audioCue, "backward");
+});
+
+test("serratus countdown spans the full repetition across reaches, holds and returns", () => {
+  const exercise = exercises.serratus_punch;
+  const steps = buildSteps(exercise, { ...exercise.initial, holdSeconds: 2 }).slice(1, 4);
+  assert.deepEqual(steps.map(({ duration, countDown, countDownAfter, countDownTotal }) =>
+    [duration, countDown, countDownAfter, countDownTotal]), [[2, true, 4, 6], [2, true, 2, 6], [2, true, 0, 6]]);
 });

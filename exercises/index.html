@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4f1e8">
     <title>腰背、肩胛与肱二头肌训练 · FengDock</title>
-    <meta name="description" content="腰背、肩胛与肱二头肌训练，支持语音引导、恢复确认和自动进阶。">
+    <meta name="description" content="腰背、肩胛与肱二头肌训练，支持语音引导、动作反馈和自动进阶。">
     <link rel="stylesheet" href="/static/articles/Poppins.css">
-    <link rel="stylesheet" href="/static/exercises/style.css?v=4">
+    <link rel="stylesheet" href="/static/exercises/style.css?v=6">
     <link rel="shortcut icon" href="/static/favicon.ico">
 </head>
 <body>
@@ -31,44 +31,24 @@
             <p class="hero__copy">计时引导会用 AI 语音提示动作、换边和休息。</p>
         </div>
 
-        <section id="recovery-panel" class="today-card recovery-panel" aria-labelledby="recovery-title" hidden>
-            <h2 id="recovery-title">恢复确认</h2>
-            <p class="last-session-note">上次训练当天或次日，疼痛或原有症状有加重吗？</p>
-            <div id="recovery-list"></div>
-        </section>
-
         <section class="today-card" aria-labelledby="today-title">
             <div class="today-card__topline">
                 <h2 id="today-title">今日计划</h2>
-                <div class="duration-pill"><strong id="plan-duration">—</strong><span>分钟康复</span></div>
+                <div class="duration-pill"><strong id="plan-duration">—</strong><span>分钟</span></div>
             </div>
             <button id="start-button" class="primary-button" type="button">
-                <span>开始今日康复</span><span aria-hidden="true">→</span>
+                <span>开始今日训练</span><span aria-hidden="true">→</span>
             </button>
             <div id="plan-list"></div>
             <p id="last-session-note" class="last-session-note"></p>
         </section>
 
-        <section class="today-card experiment-card" aria-labelledby="experiment-title">
-            <h2 id="experiment-title">肱二头肌增肌实验</h2>
-            <p id="measurement-note" class="last-session-note"></p>
-            <form id="measurement-form" class="measurement-form">
-                <label>左上臂（cm）<input name="left" type="number" min="1" max="150" step="0.1" required inputmode="decimal"></label>
-                <label>右上臂（cm）<input name="right" type="number" min="1" max="150" step="0.1" required inputmode="decimal"></label>
-                <button class="secondary-button" type="submit">保存围度</button>
-            </form>
-            <details class="experiment-trend">
-                <summary>最近 12 周的训练与围度</summary>
-                <div id="experiment-content"></div>
-            </details>
-        </section>
     </section>
 
     <section id="workout-view" class="view workout-view" aria-labelledby="exercise-name" hidden>
         <div class="workout-topline">
             <button id="exit-workout" class="text-button" type="button">结束训练</button>
             <div class="workout-progress-label"><span id="exercise-position"></span> 个动作</div>
-            <button id="report-symptom" class="danger-button" type="button">不适，停止动作</button>
         </div>
         <div class="progress-track" aria-hidden="true"><span id="workout-progress"></span></div>
 
@@ -110,7 +90,7 @@
         <p id="feedback-progress" class="eyebrow"></p>
         <h1 id="feedback-title">这个动作感觉怎么样？</h1>
         <p id="feedback-exercise" class="feedback-exercise"></p>
-        <p id="feedback-intro" class="feedback-intro">选择本次感受。训练当天或次日如有症状加重，可在首页报告。</p>
+        <p id="feedback-intro" class="feedback-intro">选择这次的感受。</p>
 
         <form id="feedback-form">
             <div id="feedback-choices" class="feedback-options" role="group" aria-label="动作反馈">
@@ -118,15 +98,10 @@
                     <span class="feedback-button__mark" aria-hidden="true">+</span>
                     <span><strong>合适</strong><small>能标准完成，且没有不适</small></span>
                 </button>
-                <button id="negative-feedback" class="feedback-button feedback-button--bad" type="button">
+                <button class="feedback-button feedback-button--bad" type="submit" name="feedback" value="-">
                     <span class="feedback-button__mark" aria-hidden="true">−</span>
-                    <span><strong>困难或不适</strong><small>选择原因以调整训练</small></span>
+                    <span><strong>不合适</strong><small>暂停该动作</small></span>
                 </button>
-            </div>
-            <div id="feedback-reasons" class="feedback-options" role="group" aria-label="困难或不适的原因" hidden>
-                <button class="secondary-button" type="submit" name="feedback" value="difficulty">太难或控制不佳，且没有不适</button>
-                <button class="danger-button" type="submit" name="feedback" value="symptoms">有疼痛、熟悉的不适、麻木或无力</button>
-                <button id="feedback-back" class="secondary-button" type="button">返回反馈选项</button>
             </div>
         </form>
         <button id="cancel-feedback" class="text-button" type="button" hidden>取消</button>
@@ -163,7 +138,7 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <div data-shared-footer></div>
-<script src="/static/exercises/app.js?v=5" type="module"></script>
+<script src="/static/exercises/app.js?v=6" type="module"></script>
 <script src="/static/common/footer.js" type="module"></script>
 </body>
 </html>

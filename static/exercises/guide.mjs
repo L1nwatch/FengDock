@@ -5,7 +5,7 @@ function roundFor(set, dose, rep, side) {
 function transition(exercise, side, roundLabel) {
   return {
     phase: "switch", duration: exercise.restSeconds ?? 6, roundLabel,
-    instruction: `${exercise.directional ? "换向" : "换边"} · ${side.label}`,
+    instruction: `换边 · ${side.label}`,
     audioCue: side.restCue ?? side.audioCue,
     tone: "switch", countDown: true,
   };
@@ -35,6 +35,16 @@ function workSteps(exercise, dose, side, roundLabel, startingSide) {
       steps.push(action(`保持 ${dose.holdSeconds} 秒`, dose.holdSeconds, { countDown: dose.holdSeconds >= 4 }));
     }
     steps.push(action("缓慢回位", dose.tempoSeconds - lift, { audioCue: "lower" }));
+    if (exercise.countDownReps) {
+      const repDuration = dose.tempoSeconds + dose.holdSeconds;
+      let secondsAfterStep = repDuration;
+      for (const step of steps) {
+        secondsAfterStep -= step.duration;
+        step.countDown = true;
+        step.countDownAfter = secondsAfterStep;
+        step.countDownTotal = repDuration;
+      }
+    }
     return steps;
   }
 
@@ -45,9 +55,9 @@ function workSteps(exercise, dose, side, roundLabel, startingSide) {
 
 export function buildSteps(exercise, dose) {
   const steps = [{
-    phase: "prepare", duration: dose.trial ? 12 : 8,
-    instruction: dose.trial ? `先用轻阻力试做，每侧 ${dose.reps} 次` : "找到稳定位置，准备开始",
-    audioCue: `${exercise.id}_${dose.trial ? "trial" : "prepare"}`,
+    phase: "prepare", duration: 8,
+    instruction: "找到稳定位置，准备开始",
+    audioCue: `${exercise.id}_prepare`,
     roundLabel: "准备姿势", tone: "ready", countDown: true,
   }];
   for (let set = 1; set <= dose.sets; set += 1) {
@@ -60,7 +70,7 @@ export function buildSteps(exercise, dose) {
       const rep = (exercise.alternate ? Math.floor(index / sides.length) : index % dose.reps) + 1;
       const roundLabel = roundFor(set, dose, rep, side);
       const startingSide = index === 0 || side !== previousSide;
-      if (index > 0 && startingSide && !exercise.alternate) steps.push(transition(exercise, side, roundLabel));
+      if (index > 0 && startingSide && !exercise.alternate && !exercise.directional) steps.push(transition(exercise, side, roundLabel));
       steps.push(...workSteps(exercise, dose, side, roundLabel, startingSide));
       previousSide = side;
     }

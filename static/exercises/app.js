@@ -1,11 +1,10 @@
-import { EXERCISES, GROUPS } from "./config.mjs?v=5";
-import { buildSteps } from "./guide.mjs?v=5";
-import { createGuideAudio } from "./audio.mjs?v=5";
+import { EXERCISES, GROUPS, POSITIONS } from "./config.mjs?v=6";
+import { buildSteps } from "./guide.mjs?v=6";
+import { createGuideAudio } from "./audio.mjs?v=6";
 import {
-  STORAGE_KEY, FEEDBACK_LABELS, migrateStore, addDays, dayKey, schedule, saveTraining,
-  latestFeedback, recoveryAvailable, confirmRecovery, undoFeedback, resumeExercise, updateResistance,
-  confirmedStreak, canReportWorse, canReplaceFeedback, replaceFeedback,
-} from "./training.mjs?v=5";
+  STORAGE_KEY, FEEDBACK_LABELS, migrateStore, schedule, saveTraining,
+  undoFeedback, resumeExercise, updateResistance, eligibleStreak, canReplaceFeedback, replaceFeedback,
+} from "./training.mjs?v=6";
 
 const views = {
   home: document.getElementById("home-view"),
@@ -52,16 +51,12 @@ const elements = {
   confirmCancel: document.getElementById("confirm-cancel"),
   confirmExit: document.getElementById("confirm-exit"),
   toast: document.getElementById("toast"),
-  recoveryPanel: document.getElementById("recovery-panel"),
-  recoveryList: document.getElementById("recovery-list"),
-  feedbackChoices: document.getElementById("feedback-choices"),
-  feedbackReasons: document.getElementById("feedback-reasons"),
   feedbackIntro: document.getElementById("feedback-intro"),
   cancelFeedback: document.getElementById("cancel-feedback"),
-  measurementForm: document.getElementById("measurement-form"),
-  measurementNote: document.getElementById("measurement-note"),
-  experimentContent: document.getElementById("experiment-content"),
 };
+
+const exerciseOrder = Object.keys(POSITIONS)
+  .flatMap((position) => EXERCISES.filter((exercise) => exercise.position === position));
 
 let store = migrateStore();
 let workout = null;
@@ -146,7 +141,7 @@ const PARAMETER_LABELS = {
 };
 
 function changeLabel(change) {
-  if (change.type === "paused") return "因不适暂停，请评估后再恢复动作";
+  if (change.type === "paused") return "按反馈暂停";
   if (change.type === "resumed") return "已恢复计划";
   if (change.type === "resistanceReady") return "当前阻力下已达到计划训练量，可以确认更高阻力";
   if (change.type === "maintenance") return "已进入维护";
@@ -177,41 +172,13 @@ function refreshStore() {
 function startPlan(exerciseId, manual = false) {
   if (workout || !refreshStore()) return;
   const now = new Date();
-  const plan = EXERCISES.filter((exercise) => exerciseId ? exercise.id === exerciseId : !exercise.trial)
+  const plan = exerciseOrder.filter((exercise) => !exerciseId || exercise.id === exerciseId)
     .map((exercise) => planItem(exercise, now)).filter((item) => item.due);
   if (!plan.length) {
     renderHome();
     return;
   }
   startWorkout(plan, manual);
-}
-
-function renderRecovery(now) {
-  const pending = EXERCISES.flatMap((exercise) => {
-    const record = latestFeedback(store, exercise.id);
-    if (store.exercises[exercise.id].status === "paused" || !record?.attempted
-        || record.recovery || record.reason === "symptoms" || !recoveryAvailable(record, now)) return [];
-    return [{ exercise, record }];
-  });
-  const rows = pending.map(({ exercise, record }) => {
-    const row = node("div", "recovery-row");
-    row.append(node("strong", "", exercise.chineseName));
-    const actions = node("div", "inline-actions");
-    actions.append(
-      button("无加重", () => act((next, time) => confirmRecovery(next, exercise.id, record.id, "ok", time))),
-      button("有加重", () => act((next, time) => confirmRecovery(next, exercise.id, record.id, "worse", time)), "danger-button"),
-    );
-    row.append(actions);
-    return row;
-  });
-  if (pending.length > 1) {
-    rows.push(button("以上动作均无加重", () => act((next, time) => {
-      for (const { exercise, record } of pending) confirmRecovery(next, exercise.id, record.id, "ok", time);
-      return "恢复确认已记录";
-    }), "secondary-button recovery-batch"));
-  }
-  elements.recoveryList.replaceChildren(...rows);
-  elements.recoveryPanel.hidden = rows.length === 0;
 }
 
 function renderResistance(state, actions) {
@@ -225,60 +192,45 @@ function renderResistance(state, actions) {
   }
 }
 
-function exerciseRow(item, now) {
-  const { exercise, dose, next, waitingForTrial, due } = item;
+function exerciseRow(item) {
+  const { exercise, dose, next, due } = item;
   const state = store.exercises[exercise.id];
+  const isCurl = exercise.id === "band_curl";
   const row = node("li", "plan-item");
   row.dataset.exercise = exercise.id;
+  row.dataset.due = String(due);
   const title = node("div", "plan-item__title");
   const name = node("strong", "plan-item__name", exercise.name);
   const level = node("span", "level-chip", `L${state.level}`);
   title.append(name, level);
   row.append(title, node("span", "plan-item__dose", exercise.chineseName));
-  const formalDose = dose.trial ? { ...state, trial: false } : dose;
-  row.append(node("span", "plan-item__target", `${dose.trial ? "正式计划 · " : ""}${doseLabel(exercise, formalDose)}`));
+  row.append(node("span", "plan-item__target", doseLabel(exercise, dose)));
   const status = [];
-  const record = latestFeedback(store, exercise.id);
-  if (state.status === "paused") status.push("已暂停 · 请评估相关不适");
+  if (state.status === "paused") status.push("已暂停");
   else if (state.status === "maintenance") status.push("维护");
   if (state.resistanceReady) status.push("可确认更高的弹力带阻力");
-  if (exercise.trial && state.status !== "paused") {
-    if (waitingForTrial) status.push("确认试做后的恢复，方可开始正式训练");
-    else if (due) status.push(dose.trial ? `首次耐受试做 · 每侧 ${dose.sets} 组 × ${dose.reps} 次` : "今天安排弯举");
-    else status.push(`下次 ${formatScheduleDate(next)}`);
-    if (state.resistanceNote) status.push(state.resistanceNote);
-  } else if (!due && state.status !== "paused") {
-    status.push(state.daysPerWeek < 7 ? `下次 ${formatScheduleDate(next)}` : "今天已记录");
+  if (state.status !== "paused") {
+    if (isCurl && due) status.push("已加入今日训练");
+    else if (!due) status.push(state.daysPerWeek < 7 ? `下次 ${formatScheduleDate(next)}` : "今天已记录");
+    if (state.status !== "maintenance" || isCurl) {
+      const goal = GROUPS[exercise.group].positiveTarget;
+      status.push(`进阶进度 ${Math.min(eligibleStreak(store, exercise.id), goal)} / ${goal}`);
+    }
   }
-  if (state.status !== "paused" && (state.status !== "maintenance" || exercise.trial)) {
-    const goal = GROUPS[exercise.group].positiveTarget;
-    status.push(`连续 + ${state.positiveStreak} 次 · 已确认 ${Math.min(confirmedStreak(store, exercise.id, true), goal)} / ${goal}`);
-  }
-  if (record?.attempted && !record.recovery && record.reason !== "symptoms" && state.status !== "paused") {
-    status.push("待确认恢复");
-  }
+  if (isCurl && state.resistanceNote) status.push(state.resistanceNote);
   row.append(node("span", "plan-item__dose", status.join(" · ")));
   if (state.lastChange) {
     row.append(node("span", "plan-item__dose", `最近调整 · ${changeLabel(state.lastChange)}`));
   }
   const actions = node("div", "inline-actions");
-  if (due) {
-    actions.append(button(dose.trial ? "开始试做" : "开始引导", () => startPlan(exercise.id)));
-    actions.append(button(dose.trial ? "试做已完成" : "已完成", () => startPlan(exercise.id, true)));
+  if (due && !isCurl) {
+    actions.append(button("开始引导", () => startPlan(exercise.id)));
+    actions.append(button("已完成", () => startPlan(exercise.id, true)));
   }
   if (state.status === "paused") {
-    actions.append(button("评估后恢复", () => {
-      if (window.confirm("确认已评估相关不适，并适合恢复这个动作？")) {
-        act((nextStore, time) => resumeExercise(nextStore, exercise.id, time));
-      }
-    }));
-  } else {
-    if (canReportWorse(store, exercise.id, record, now) && (record.recovery || !recoveryAvailable(record, now))) {
-      actions.append(button("报告症状加重", () => {
-        act((nextStore, time) => confirmRecovery(nextStore, exercise.id, record.id, "worse", time));
-      }, "danger-button"));
-    }
-    if (exercise.trial) renderResistance(state, actions);
+    actions.append(button("恢复动作", () => act((nextStore, time) => resumeExercise(nextStore, exercise.id, time))));
+  } else if (isCurl) {
+    renderResistance(state, actions);
   }
   if (actions.childElementCount) row.append(actions);
   return row;
@@ -286,66 +238,24 @@ function exerciseRow(item, now) {
 
 function renderHome() {
   const now = new Date();
-  const plan = EXERCISES.map((exercise) => planItem(exercise, now));
-  const rehab = plan.filter((item) => !item.exercise.trial && item.due);
+  const plan = exerciseOrder.map((exercise) => planItem(exercise, now));
+  const due = plan.filter((item) => item.due);
   elements.todayLabel.textContent = new Intl.DateTimeFormat("zh-CN", {
     month: "long", day: "numeric", weekday: "long",
   }).format(now);
-  elements.planDuration.textContent = String(Math.ceil(rehab.reduce((sum, item) => sum + item.durationSeconds, 0) / 60));
-  elements.startButton.disabled = !rehab.length;
-  elements.startButton.firstElementChild.textContent = rehab.length ? "开始今日康复" : "今天的康复计划已结束";
-  elements.planList.replaceChildren(...Object.entries(GROUPS).map(([id, group]) => {
+  elements.planDuration.textContent = String(Math.ceil(due.reduce((sum, item) => sum + item.durationSeconds, 0) / 60));
+  elements.startButton.disabled = !due.length;
+  elements.startButton.firstElementChild.textContent = due.length ? `开始今日训练 · ${due.length} 个动作` : "今天没有待练动作";
+  elements.planList.replaceChildren(...Object.entries(POSITIONS).map(([id, name]) => {
     const section = node("section", "plan-group");
-    section.append(node("h3", "", group.name));
+    section.append(node("h3", "", name));
     const list = node("ul", "plan-list");
-    list.append(...plan.filter((item) => item.exercise.group === id).map((item) => exerciseRow(item, now)));
+    list.append(...plan.filter((item) => item.exercise.position === id).map(exerciseRow));
     section.append(list);
     return section;
   }));
-  elements.lastSessionNote.textContent = "可以按需跳过动作。康复进阶以完成质量和恢复确认计算。";
-  renderRecovery(now);
-  renderExperiment(now);
+  elements.lastSessionNote.textContent = "可以按需跳过动作。";
   updateVoiceButton();
-}
-
-function renderExperiment(now) {
-  const last = store.measurements[0];
-  const next = last && addDays(last.timestamp, 14);
-  elements.measurementNote.textContent = !last || dayKey(now) >= dayKey(next)
-    ? "可以记录左右上臂围度。建议每两周在相同条件下测量一次。"
-    : `下次围度记录 · ${formatSessionDate(next)}`;
-  const start = addDays(now, -83);
-  start.setHours(0, 0, 0, 0);
-  const records = store.sessions.flatMap((session) => session.records ?? []).filter((record) =>
-    record.exercise_id === "band_curl" && record.completed && !record.prescribed_dose.trial && new Date(record.timestamp) >= start,
-  ).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  const rows = Array.from({ length: 12 }, (_, index) => {
-    const from = addDays(start, (11 - index) * 7);
-    const until = addDays(from, 7);
-    const inWeek = (entry) => new Date(entry.timestamp) >= from && new Date(entry.timestamp) < until;
-    const training = records.filter(inWeek);
-    const measurements = store.measurements.filter(inWeek);
-    if (!training.length && !measurements.length) return null;
-    const row = node("tr");
-    const week = node("th", "", new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(from));
-    week.scope = "row";
-    row.append(week);
-    const performance = node("td");
-    for (const { prescribed_dose: dose, timestamp } of training) {
-      performance.append(node("span", "", `${formatSessionDate(timestamp)} · R${dose.resistanceLevel} · ${dose.sets}×${dose.reps} / 侧 · ${dose.tempoSeconds} 秒/次`));
-    }
-    const arms = node("td");
-    for (const measurement of measurements) {
-      arms.append(node("span", "", `${formatSessionDate(measurement.timestamp)} · ${measurement.left} / ${measurement.right}`));
-    }
-    row.append(performance, arms);
-    return row;
-  }).filter(Boolean);
-  const table = node("table", "trend-table");
-  const header = table.createTHead().insertRow();
-  for (const title of ["周起始", "完成剂量", "左右围度（cm）"]) header.append(node("th", "", title));
-  table.createTBody().append(...rows);
-  elements.experimentContent.replaceChildren(rows.length ? table : node("p", "plan-item__dose", "暂无围度或正式弯举记录。"));
 }
 
 function newId() {
@@ -391,9 +301,10 @@ function enterCurrentStep() {
   workout.deadline = Date.now() + workout.remainingMs;
   workout.nextCountdownSecond = 3;
   renderWorkout();
-  speak(step.audioCue, {
-    tone: step.tone, windowSeconds: step.duration - (step.countDown ? 3 : 0),
-  });
+  const cueWindow = step.countDown
+    ? Math.min(step.duration, step.duration + (step.countDownAfter ?? 0) - 3) : step.duration;
+  if (cueWindow > 0) speak(step.audioCue, { tone: step.tone, windowSeconds: cueWindow });
+  else guideAudio.stop();
   vibrate(step.phase === "work" ? [60] : [35, 40, 35]);
   timerId = window.setInterval(tickTimer, 100);
 }
@@ -403,9 +314,13 @@ function tickTimer() {
   const step = currentStep();
   if (!step) return;
   workout.remainingMs = Math.max(0, workout.deadline - Date.now());
+  if (workout.remainingMs <= 0) {
+    finishStep({ skipped: false });
+    return;
+  }
   renderTimer(step);
 
-  const countdownSecond = Math.ceil(workout.remainingMs / 1000);
+  const countdownSecond = Math.ceil(secondsLeft(step));
   if (
     step.countDown
     && countdownSecond >= 1
@@ -413,10 +328,6 @@ function tickTimer() {
   ) {
     workout.nextCountdownSecond = countdownSecond - 1;
     if (store.voiceEnabled) guideAudio.countdown(countdownSecond);
-  }
-
-  if (workout.remainingMs <= 0) {
-    finishStep({ skipped: false });
   }
 }
 
@@ -486,8 +397,7 @@ function renderWorkout() {
   const priorSteps = workout.plan.slice(0, workout.exerciseIndex).reduce((sum, planItem) => sum + planItem.steps.length, 0);
   const progress = ((priorSteps + workout.stepIndex) / totalSteps) * 100;
   elements.workoutProgress.style.width = `${Math.max(2, progress)}%`;
-  elements.phaseBadge.textContent = step.phase === "switch" && item.exercise.directional
-    ? "换向" : phaseLabels[step.phase];
+  elements.phaseBadge.textContent = phaseLabels[step.phase];
   elements.phaseBadge.dataset.phase = step.phase;
   elements.roundLabel.textContent = step.roundLabel;
   elements.exercisePurpose.textContent = item.exercise.purpose;
@@ -498,10 +408,14 @@ function renderWorkout() {
   renderTimer(step);
 }
 
+function secondsLeft(step) {
+  return workout.remainingMs / 1000 + (step.countDownAfter ?? 0);
+}
+
 function renderTimer(step) {
   if (!workout || !step) return;
-  const seconds = Math.max(0, Math.ceil(workout.remainingMs / 1000));
-  const percentage = Math.max(0, Math.min(100, (workout.remainingMs / (step.duration * 1000)) * 100));
+  const seconds = Math.ceil(secondsLeft(step));
+  const percentage = Math.min(100, (secondsLeft(step) / (step.countDownTotal ?? step.duration)) * 100);
   elements.countdown.textContent = String(seconds);
   elements.timerRing.style.setProperty("--timer-progress", `${percentage}%`);
   elements.timerRing.setAttribute("aria-label", `当前步骤剩余 ${seconds} 秒`);
@@ -511,31 +425,25 @@ function currentStep() {
   return workout?.plan[workout.exerciseIndex]?.steps[workout.stepIndex] || null;
 }
 
-function renderExerciseFeedback(negative = false) {
+function renderExerciseFeedback() {
   showView("feedback");
   const item = workout.plan[workout.exerciseIndex];
   const result = workout.results[workout.exerciseIndex];
   elements.feedbackProgress.textContent = `动作 ${workout.exerciseIndex + 1} / ${workout.plan.length}`;
   elements.feedbackExercise.textContent = `${item.exercise.name} · ${item.exercise.chineseName}`;
-  elements.feedbackIntro.textContent = result.completed
-    ? "训练当天或次日如有症状加重，可在首页报告。"
-    : "本次动作未完整完成。仍可报告训练困难或不适。";
-  elements.feedbackChoices.hidden = negative || !result.completed;
-  elements.feedbackReasons.hidden = !negative && result.completed;
-  document.getElementById("feedback-back").hidden = !result.completed;
-  elements.cancelFeedback.hidden = !workout.manual && result.completed && !workout.saveFailed;
-  elements.cancelFeedback.textContent = workout.manual || workout.saveFailed ? "取消" : "跳过这次反馈";
+  elements.feedbackIntro.textContent = result.completed ? "选择这次的感受。" : "这次动作提前结束，可以记录感受。";
+  elements.cancelFeedback.hidden = !workout.manual && !workout.saveFailed;
+  elements.cancelFeedback.textContent = "取消";
   for (const control of elements.feedbackForm.querySelectorAll("button")) control.disabled = false;
 }
 
 function saveFeedback(event) {
   event.preventDefault();
   const value = event.submitter?.value;
-  if (value === "+") submitResult("+");
-  else if (value === "difficulty" || value === "symptoms") submitResult("-", value);
+  if (value === "+" || value === "-") submitResult(value);
 }
 
-async function submitResult(feedback, reason) {
+async function submitResult(feedback) {
   if (!workout || workout.saving) return;
   const current = workout;
   const { exercise, dose } = current.plan[current.exerciseIndex];
@@ -543,7 +451,7 @@ async function submitResult(feedback, reason) {
   const attempted = Boolean(feedback || result.completedWorkSteps
     || current.plan[current.exerciseIndex].steps[current.stepIndex]?.phase === "work");
   const input = { id: result.id, sessionId: current.id, startedAt: current.startedAt,
-    completed: Boolean(feedback && result.completed), attempted, dose, feedback, reason };
+    completed: Boolean(feedback && result.completed), attempted, dose, feedback };
   current.saving = true;
   clearTimer();
   guideAudio.stop();
@@ -551,7 +459,7 @@ async function submitResult(feedback, reason) {
 
   try {
     const change = await updateStore((next, time) => current.correction
-      ? replaceFeedback(next, exercise.id, current.correction, feedback, reason, time)
+      ? replaceFeedback(next, exercise.id, current.correction, feedback, time)
       : saveTraining(next, exercise.id, input, time));
     if (change) current.adjustments.push({ name: exercise.chineseName, change });
     if (current.correction) {
@@ -564,9 +472,9 @@ async function submitResult(feedback, reason) {
       return;
     }
     if (feedback === "+") speak("feedback_good");
-    else if (feedback === "-") speak(reason === "symptoms" ? "symptom_stop" : "feedback_good");
+    else if (feedback === "-") speak("symptom_stop");
     else speak("exercise_skipped");
-    await advanceToNextExercise(current, reason === "symptoms" ? 1800 : 850);
+    await advanceToNextExercise(current, feedback === "-" ? 1800 : 850);
   } catch (error) {
     current.saving = false;
     current.saveFailed = true;
@@ -588,7 +496,7 @@ async function advanceToNextExercise(current, delay = 850) {
     current.saving = false;
     const item = current.plan[current.exerciseIndex];
     const next = refreshStore() && schedule(store, item.exercise, new Date());
-    if (!next?.due || next.dose.version !== item.dose.version || next.dose.trial !== item.dose.trial) {
+    if (!next?.due || next.dose.version !== item.dose.version) {
       advanceToNextExercise(current);
       return;
     }
@@ -606,7 +514,7 @@ async function closeSession(status) {
       const result = current.results[current.exerciseIndex];
       if (result.completedWorkSteps || currentStep()?.phase === "work") {
         const nextPlan = schedule(next, exercise, now);
-        if (nextPlan.due && nextPlan.dose.version === dose.version && nextPlan.dose.trial === dose.trial) {
+        if (nextPlan.due && nextPlan.dose.version === dose.version) {
           saveTraining(next, exercise.id, {
             id: result.id, sessionId: current.id, startedAt: current.startedAt,
             completed: false, attempted: true, dose, feedback: null,
@@ -636,8 +544,8 @@ async function finishWorkout() {
 
 function renderSummary(adjustments) {
   elements.summaryCopy.textContent = adjustments.some(({ change }) => change.type === "paused")
-    ? "因不适暂停的动作会从计划中移除，待评估后可在首页恢复。"
-    : "训练已保存。训练当天或次日如有症状加重，可在首页报告。";
+    ? "标为不合适的动作已暂停，可在首页恢复。"
+    : "训练已保存。";
   elements.adjustmentList.replaceChildren(...adjustments.map(({ name, change }) => {
     const row = node("article", "adjustment-item");
     const copy = node("div");
@@ -648,8 +556,7 @@ function renderSummary(adjustments) {
 }
 
 function renderHistory() {
-  const now = new Date();
-  const adjustments = node("details", "experiment-trend");
+  const adjustments = node("details", "dose-history");
   adjustments.append(node("summary", "", "剂量调整历史"));
   for (const change of store.changes.slice().reverse()) {
     const exercise = EXERCISES.find((item) => item.id === change.exerciseId);
@@ -673,12 +580,10 @@ function renderHistory() {
       item.dataset.feedback = record.feedback || "skipped";
       const label = record.voidedAt ? "反馈已撤销" : (FEEDBACK_LABELS[record.feedback] ?? record.feedback)
         || (record.completed ? "旧规则记录" : "已跳过");
-      const recovery = record.recovery?.outcome === "ok" ? "恢复无加重" : record.recovery ? "恢复有加重" : "";
-      const reason = { difficulty: "困难", symptoms: "有症状" }[record.reason];
       item.append(node("span", "", [
         name, !exercise && "已归档", record.level && `L${record.level}`,
         record.prescribed_dose?.trial && "试做", doseLabel(exercise, record.prescribed_dose ?? {}),
-        record.prescribed_dose?.resistanceNote, label, reason, recovery,
+        record.prescribed_dose?.resistanceNote, label,
       ].filter(Boolean).join(" · ")));
       const actions = node("div", "inline-actions");
       if (exercise && !workout) {
@@ -693,10 +598,6 @@ function renderHistory() {
             workout.correction = record.id;
             renderExerciseFeedback();
           }));
-        }
-        if (canReportWorse(store, exercise.id, record, now)) {
-          actions.append(button("报告加重", () => act((next, time) =>
-            confirmRecovery(next, exercise.id, record.id, "worse", time)), "danger-button"));
         }
       }
       if (actions.childElementCount) item.append(actions);
@@ -798,22 +699,15 @@ elements.pauseButton.addEventListener("click", togglePause);
 elements.skipStepButton.addEventListener("click", () => finishStep({ skipped: true }));
 elements.skipExerciseButton.addEventListener("click", skipExercise);
 document.getElementById("complete-exercise").addEventListener("click", () => completeCurrentExercise(true));
-document.getElementById("report-symptom").addEventListener("click", () => submitResult("-", "symptoms"));
-document.getElementById("negative-feedback").addEventListener("click", () => renderExerciseFeedback(true));
-document.getElementById("feedback-back").addEventListener("click", () => renderExerciseFeedback());
 elements.cancelFeedback.addEventListener("click", () => {
   if (workout.saving) return;
-  if (workout.manual || workout.saveFailed) {
-    const returnToHistory = workout.correction;
-    workout = null;
-    showView("home");
-    renderHome();
-    if (returnToHistory) {
-      renderHistory();
-      elements.historyDialog.showModal();
-    }
-  } else {
-    skipExercise();
+  const returnToHistory = workout.correction;
+  workout = null;
+  showView("home");
+  renderHome();
+  if (returnToHistory) {
+    renderHistory();
+    elements.historyDialog.showModal();
   }
 });
 elements.exitWorkout.addEventListener("click", () => {
@@ -865,21 +759,6 @@ elements.resetDataButton.addEventListener("click", async () => {
     renderHistory();
     renderHome();
     showToast("训练数据已清除");
-  } catch (error) {
-    displayError(error);
-  }
-});
-elements.measurementForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const data = new FormData(elements.measurementForm);
-  try {
-    await updateStore((next, now) => {
-      const values = { timestamp: now.toISOString(), left: Number(data.get("left")), right: Number(data.get("right")) };
-      next.measurements.unshift(values);
-    });
-    elements.measurementForm.reset();
-    renderExperiment(new Date());
-    showToast("围度已保存");
   } catch (error) {
     displayError(error);
   }

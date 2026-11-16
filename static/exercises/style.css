@@ -273,88 +273,11 @@ h2 {
   padding-bottom: 18px;
 }
 
-.recovery-panel {
-  margin-bottom: 24px;
-}
-
-.recovery-panel .last-session-note,
-.experiment-card .last-session-note {
-  text-align: left;
-}
-
-.recovery-row {
-  min-height: 56px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 8px;
-}
-
-.recovery-row strong {
-  font-size: 0.86rem;
-}
-
-.recovery-row .inline-actions {
-  margin: 0;
-}
-
-.recovery-batch {
-  margin-top: 12px;
-}
-
-.experiment-card {
-  margin-top: 24px;
-}
-
-.measurement-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px;
-  margin-block: 16px;
-}
-
-.measurement-form label {
-  flex: 1 1 100px;
-  display: grid;
-  gap: 4px;
-  max-width: 180px;
-  font-size: 0.8rem;
-}
-
-.measurement-form input {
-  width: 100%;
-  min-height: 42px;
-  padding-inline: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-}
-
-.experiment-trend summary {
+.dose-history summary {
   padding-block: 10px;
   font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
-}
-
-.trend-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.73rem;
-  text-align: left;
-}
-
-.trend-table :is(th, td) {
-  padding: 8px 6px;
-  border-top: 1px solid var(--line);
-  vertical-align: top;
-}
-
-.trend-table td span {
-  display: block;
 }
 
 .level-chip {
@@ -639,10 +562,6 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-
-#feedback-reasons {
-  grid-template-columns: 1fr;
 }
 
 .feedback-button {
