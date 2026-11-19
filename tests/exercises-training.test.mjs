@@ -377,3 +377,12 @@ test("serratus countdown spans the full repetition across reaches, holds and ret
   assert.deepEqual(steps.map(({ duration, countDown, countDownAfter, countDownTotal }) =>
     [duration, countDown, countDownAfter, countDownTotal]), [[2, true, 4, 6], [2, true, 2, 6], [2, true, 0, 6]]);
 });
+
+test("biceps side changes last ten seconds independently of the rest between sets", () => {
+  const exercise = exercises.band_curl;
+  const steps = buildSteps(exercise, exercise.initial);
+  const switches = steps.filter(({ phase }) => phase === "switch");
+  assert.equal(switches.length, 2);
+  assert.ok(switches.every(({ duration, countDown }) => duration === 10 && countDown));
+  assert.ok(steps.filter(({ phase }) => phase === "rest").every(({ duration }) => duration === 60));
+});

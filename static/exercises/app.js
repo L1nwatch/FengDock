@@ -1,10 +1,10 @@
-import { EXERCISES, GROUPS, POSITIONS } from "./config.mjs?v=6";
-import { buildSteps } from "./guide.mjs?v=6";
-import { createGuideAudio } from "./audio.mjs?v=6";
+import { EXERCISES, GROUPS, POSITIONS } from "./config.mjs?v=7";
+import { buildSteps } from "./guide.mjs?v=7";
+import { createGuideAudio } from "./audio.mjs?v=7";
 import {
   STORAGE_KEY, FEEDBACK_LABELS, migrateStore, schedule, saveTraining,
   undoFeedback, resumeExercise, updateResistance, eligibleStreak, canReplaceFeedback, replaceFeedback,
-} from "./training.mjs?v=6";
+} from "./training.mjs?v=7";
 
 const views = {
   home: document.getElementById("home-view"),
@@ -617,7 +617,7 @@ function showView(name) {
 }
 
 async function toggleVoice() {
-  if (!store.voiceEnabled) guideAudio.unlock();
+  if (!store.voiceEnabled) guideAudio.unlock({ reset: true });
   try {
     await updateStore((next) => { next.voiceEnabled = !next.voiceEnabled; });
   } catch (error) {
@@ -628,7 +628,7 @@ async function toggleVoice() {
     guideAudio.preload();
     speak("voice_enabled");
   } else {
-    guideAudio.stop();
+    guideAudio.disable();
   }
   updateVoiceButton();
 }
@@ -765,12 +765,24 @@ elements.resetDataButton.addEventListener("click", async () => {
 });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  if (store.voiceEnabled) guideAudio.recover();
   if (workout && !views.workout.hidden && !wakeLock) requestWakeLock();
   if (!views.home.hidden && refreshStore()) renderHome();
 });
+for (const event of ["focus", "pageshow"]) {
+  window.addEventListener(event, () => {
+    if (store.voiceEnabled) guideAudio.recover();
+  });
+}
+document.addEventListener("pointerdown", () => {
+  if (store.voiceEnabled) guideAudio.recover({ userGesture: true });
+}, { passive: true });
+document.addEventListener("keydown", () => {
+  if (store.voiceEnabled) guideAudio.recover({ userGesture: true });
+});
 window.addEventListener("storage", (event) => {
   if (event.key !== STORAGE_KEY || !refreshStore()) return;
-  if (!store.voiceEnabled) guideAudio.stop();
+  if (!store.voiceEnabled) guideAudio.disable();
   const active = workout?.plan[workout.exerciseIndex];
   if (active && !workout.saving && !workout.correction && store.exercises[active.exercise.id].status === "paused") {
     clearTimer();
@@ -790,7 +802,7 @@ window.setInterval(() => {
 window.addEventListener("beforeunload", () => {
   clearTimer();
   releaseWakeLock();
-  guideAudio.stop();
+  guideAudio.disable();
 });
 
 if (refreshStore()) {

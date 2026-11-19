@@ -88,6 +88,7 @@ export const EXERCISES = [
       increase("daysPerWeek", 3),
     ],
     fallback: increase("tempoSeconds", 6),
+    switchSeconds: 10,
     restSeconds: 60,
   },
 ];

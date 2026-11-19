@@ -290,3 +290,113 @@ def test_cat_cow_phases_count_down_and_reuse_downloads(exercise_page):
             page.clock.run_for(3000)
             spoken = page.evaluate("start => window.exerciseAudio.slice(start)", start_index)
             assert len(spoken) == 3 and all(length < 1 for length in spoken)
+
+
+@pytest.mark.e2e
+def test_mobile_audio_recovers_from_interruptions_and_rebuilds_stuck_context(exercise_page):
+    page = exercise_page
+    page.add_init_script(
+        """{
+            window.exerciseContexts = [];
+            window.exercisePlayedClips = 0;
+            const NativeContext = window.AudioContext;
+            window.AudioContext = new Proxy(NativeContext, {
+                construct(target, args) {
+                    const context = Reflect.construct(target, args);
+                    const state = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "state").get.bind(context);
+                    const resume = context.resume.bind(context);
+                    const item = { context, override: null, stuck: false, resumeCalls: 0 };
+                    Object.defineProperty(context, "state", { get: () => item.override ?? state() });
+                    context.resume = () => {
+                        item.resumeCalls += 1;
+                        if (item.stuck) return new Promise(() => {});
+                        item.override = null;
+                        return resume();
+                    };
+                    window.exerciseContexts.push(item);
+                    return context;
+                }
+            });
+            const start = AudioBufferSourceNode.prototype.start;
+            AudioBufferSourceNode.prototype.start = function (...args) {
+                window.exercisePlayedClips += 1;
+                return start.apply(this, args);
+            };
+        }"""
+    )
+    errors = []
+    requested = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("request", lambda request: requested.append(request.url) if request.url.endswith(".mp3") else None)
+    page.goto("http://localhost/exercises/")
+    page.locator("#start-button").click()
+    page.wait_for_function("window.exercisePlayedClips >= 1")
+    page.wait_for_function(
+        """async () => {
+            const response = await fetch("/static/exercises/audio/manifest.json");
+            const manifest = await response.json();
+            return new Promise(resolve => {
+                const request = indexedDB.open("fengdock-exercise-clips", 1);
+                request.onsuccess = () => {
+                    const database = request.result;
+                    const keys = database.transaction("clips").objectStore("clips").getAllKeys();
+                    keys.onsuccess = () => {
+                        database.close();
+                        resolve(Object.values(manifest.cues).every(cue => keys.result.includes(cue.file)));
+                    };
+                };
+            });
+        }"""
+    )
+    page.locator("#pause-button").click()
+
+    # Simulate the interrupted state used by mobile browsers after another app takes audio.
+    resume_calls = page.evaluate("window.exerciseContexts[0].resumeCalls")
+    page.evaluate(
+        """async () => {
+            const item = window.exerciseContexts[0];
+            await item.context.suspend();
+            item.override = "interrupted";
+            document.dispatchEvent(new Event("visibilitychange"));
+        }"""
+    )
+    # WebKit may require a fresh gesture even after a foreground resume attempt.
+    played = page.evaluate("window.exercisePlayedClips")
+    page.locator("#pause-button").click()
+    page.wait_for_function("window.exerciseContexts[0].context.state === 'running'")
+    assert page.evaluate("window.exerciseContexts[0].resumeCalls") > resume_calls
+    page.wait_for_function("before => window.exercisePlayedClips > before", arg=played)
+
+    # A resume promise can remain pending. Switching voice off and on must replace it.
+    page.locator("#complete-exercise").click()
+    page.evaluate(
+        """async () => {
+            const item = window.exerciseContexts[0];
+            item.stuck = true;
+            await item.context.suspend();
+            item.override = "interrupted";
+            window.dispatchEvent(new Event("focus"));
+        }"""
+    )
+    page.locator("#voice-toggle").click()
+    expect(page.locator("#voice-toggle")).to_have_attribute("aria-pressed", "false")
+    played = page.evaluate("window.exercisePlayedClips")
+    requested.clear()
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    page.clock.run_for(1000)
+    assert page.evaluate("window.exercisePlayedClips") == played
+    page.locator("#voice-toggle").click()
+    page.wait_for_function(
+        "window.exerciseContexts.length === 2 && window.exerciseContexts[1].context.state === 'running'"
+    )
+    page.wait_for_function("before => window.exercisePlayedClips > before", arg=played)
+    assert requested == []
+
+    # Closing the old context is another recoverable browser lifecycle event.
+    page.evaluate("window.exerciseContexts.at(-1).context.close()")
+    page.evaluate("window.dispatchEvent(new Event('pageshow'))")
+    page.locator("#feedback-title").click()
+    page.wait_for_function(
+        "window.exerciseContexts.length >= 3 && window.exerciseContexts.at(-1).context.state === 'running'"
+    )
+    assert errors == []

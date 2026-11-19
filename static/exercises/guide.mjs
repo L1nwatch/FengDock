@@ -4,7 +4,7 @@ function roundFor(set, dose, rep, side) {
 
 function transition(exercise, side, roundLabel) {
   return {
-    phase: "switch", duration: exercise.restSeconds ?? 6, roundLabel,
+    phase: "switch", duration: exercise.switchSeconds ?? 6, roundLabel,
     instruction: `换边 · ${side.label}`,
     audioCue: side.restCue ?? side.audioCue,
     tone: "switch", countDown: true,

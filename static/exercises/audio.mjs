@@ -46,6 +46,8 @@ export function createGuideAudio() {
   const clips = new Map();
   const playing = new Set();
   let context;
+  let enabled = false;
+  let resuming;
   let manifestRequest;
   let cacheRequest;
   let cues;
@@ -75,9 +77,10 @@ export function createGuideAudio() {
 
   function decode(clip) {
     if (!context) return;
-    return clip.decoding ??= clip.bytes.then((bytes) => context.decodeAudioData(bytes))
+    const decoder = context;
+    return clip.decoding ??= clip.bytes.then((bytes) => decoder.decodeAudioData(bytes.slice(0)))
       .then((buffer) => { clip.audio = trimClip(buffer); })
-      .catch(() => {});
+      .catch(() => { clip.decoding = null; });
   }
 
   function clipFor(id) {
@@ -98,16 +101,78 @@ export function createGuideAudio() {
     }));
   }
 
-  function unlock() {
-    const AudioContext = window.AudioContext ?? window.webkitAudioContext;
-    if (!AudioContext) return;
+  function setSessionType(type) {
     try {
-      context ??= new AudioContext();
-      if (context.state !== "running") context.resume().catch(() => {});
-      for (const clip of clips.values()) decode(clip);
+      if (window.navigator.audioSession) window.navigator.audioSession.type = type;
     } catch {
-      // The on-screen timer remains usable without an audio device.
+      // Browsers without Audio Session support still recover the AudioContext.
     }
+  }
+
+  function resumeContext(userGesture = false) {
+    const target = context;
+    if (target.state === "running") return Promise.resolve(true);
+    if (resuming?.context === target && !userGesture) return resuming.promise;
+    // A mobile interruption can leave resume() pending until another user gesture.
+    const request = { context: target };
+    request.promise = new Promise((resolve) => {
+      const timeout = window.setTimeout(() => resolve(false), 500);
+      try {
+        target.resume().then(() => {
+          window.clearTimeout(timeout);
+          resolve(enabled && context === target && target.state === "running");
+        }, () => {
+          window.clearTimeout(timeout);
+          resolve(false);
+        });
+      } catch {
+        window.clearTimeout(timeout);
+        resolve(false);
+      }
+    }).finally(() => {
+      if (resuming === request) resuming = null;
+    });
+    resuming = request;
+    return request.promise;
+  }
+
+  function unlock({ reset = false } = {}) {
+    const AudioContext = window.AudioContext ?? window.webkitAudioContext;
+    if (!AudioContext) return Promise.resolve(false);
+    enabled = true;
+    // Short coaching cues can share the output with background media.
+    setSessionType("transient");
+    try {
+      if (reset || !context || context.state === "closed") {
+        const previous = context;
+        stop();
+        resuming = null;
+        context = new AudioContext();
+        const target = context;
+        target.addEventListener("statechange", () => {
+          if (context !== target || !enabled || target.state === "running") return;
+          stop();
+          if (!document.hidden) recover();
+        });
+        if (previous && previous.state !== "closed") previous.close().catch(() => {});
+      }
+      for (const clip of clips.values()) decode(clip);
+      return resumeContext(true);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  function recover({ userGesture = false } = {}) {
+    if (!enabled || !context) return Promise.resolve(false);
+    if (context.state === "closed") return unlock();
+    return resumeContext(userGesture);
+  }
+
+  function disable() {
+    enabled = false;
+    stop();
+    setSessionType("auto");
   }
 
   function stop() {
@@ -147,33 +212,31 @@ export function createGuideAudio() {
 
   function play(id, { tone, windowSeconds, countdown } = {}) {
     stop();
-    if (!context) return;
-    if (tone) beep(NOTES[tone]);
-    if (!id) return;
-    const clip = clipFor(id);
-    if (clip && context.state === "running") {
-      playClip(clip, tone ? 0.1 : 0, windowSeconds);
-      return;
-    }
-    if (countdown) {
-      beep(880 - countdown * 80);
-      preload([id]);
-      return;
-    }
-    // A cold-start clip may arrive just after the user presses Start.
+    if (!enabled || !context) return;
     const thisPlayback = playback;
     const requestedAt = performance.now();
-    preload([id]).then(() => {
+    const playReady = () => {
       const elapsed = (performance.now() - requestedAt) / 1000;
-      const ready = clipFor(id);
-      if (thisPlayback === playback && ready && elapsed <= 0.6 && context.state === "running") {
-        playClip(ready, 0, windowSeconds - elapsed);
+      if (!enabled || thisPlayback !== playback || context.state !== "running" || elapsed > 0.6) return;
+      if (tone) beep(NOTES[tone]);
+      const clip = clipFor(id);
+      if (clip) {
+        playClip(clip, tone ? 0.1 : 0, windowSeconds - elapsed);
+      } else if (countdown) {
+        beep(880 - countdown * 80);
+        preload([id]);
       }
-    });
+    };
+    if (context.state === "running" && (!id || clipFor(id) || countdown)) {
+      playReady();
+      return;
+    }
+    // Wait for recovery and loading, then discard a cue that has become stale.
+    Promise.all([recover(), id ? preload([id]) : undefined]).then(playReady);
   }
 
   return {
-    preload, unlock, play, stop,
+    preload, unlock, recover, disable, play, stop,
     countdown: (second) => play(`countdown_${second}`, { countdown: second, windowSeconds: 1 }),
   };
 }
