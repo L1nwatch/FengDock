@@ -179,9 +179,9 @@ def test_decision_editor_drag_save_and_mcp_reload(decision_workflow):
         assert pane
         x, y = pane["x"] + 50, pane["y"] + pane["height"] - 70
         page.mouse.move(x, y)
-        page.mouse.down()
+        page.mouse.down(button="right")
         page.mouse.move(x + 40, y - 20, steps=8)
-        page.mouse.up()
+        page.mouse.up(button="right")
         expect(viewport).not_to_have_attribute("style", before_pan)
         canvas.get_by_role("button", name="适应画布").click()
         canvas.get_by_role("button", name="自动布局").click()
@@ -567,4 +567,131 @@ def test_applying_local_checks_the_confirmed_remote_version(decision_workflow):
         assert backup["version"] == 3 and backup["nodes"][0]["text"] == "Newer remote edit"
         expect(local.get_by_role("status")).to_have_text("已保存 · v4")
         assert api.get(path).json()["nodes"][0]["text"] == "Local edit"
+        browser.close()
+
+
+@pytest.mark.e2e
+def test_box_selection_moves_and_deletes_branches_as_a_group(decision_workflow):
+    app, api, _ = decision_workflow
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists() or "/conclusion/assets/" not in index.read_text():
+        pytest.skip("Build Conclusion with VITE_API_BASE=/conclusion npm run build -- --base=/conclusion/")
+    seed = [
+        ("root", None, 0, 0, 100),
+        ("a", "root", 0, 300, 0),
+        ("a1", "a", 0, 620, 0),
+        ("hidden", "a1", 0, 940, 0),
+        ("b", "root", 1, 300, 180),
+        ("b1", "b", 0, 620, 180),
+        ("c", "root", 2, 300, 360),
+        ("c1", "c", 0, 620, 360),
+    ]
+    record = api.post("/api/decisions", json={
+        "title": "Group selection",
+        "nodes": [
+            {"id": key, "parentId": parent, "order": order, "text": key,
+             "positionX": x, "positionY": y, "collapsed": key == "a1"}
+            for key, parent, order, x, y in seed
+        ],
+    }).json()
+    path = f"/api/decisions/{record['id']}"
+    full = FastAPI()
+    full.mount("/conclusion", app)
+
+    with _serve(full) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.clock.install()
+        page.goto(f"{url}/conclusion/decision-trees/{record['id']}")
+        canvas = page.locator(".tree-canvas")
+        card = lambda node_id: page.locator(f'[data-node-id="{node_id}"]')
+        expect(card("b1")).to_be_visible()
+
+        def box_select(node_ids, partial=False):
+            boxes = [card(node_id).bounding_box() for node_id in node_ids]
+            left = min(box["x"] for box in boxes) - 12
+            top = min(box["y"] for box in boxes) - 12
+            right = max(box["x"] + box["width"] for box in boxes) + 12
+            bottom = max(box["y"] + box["height"] for box in boxes) + 12
+            if partial:
+                bottom = max(box["y"] for box in boxes) + 5
+            page.mouse.move(left, top)
+            page.mouse.down()
+            page.mouse.move(right, bottom, steps=12)
+            page.mouse.up()
+
+        viewport = canvas.locator(".vue-flow__transformationpane")
+        initial_view = viewport.get_attribute("style")
+        canvas.get_by_role("button", name="缩小").click()
+        expect(viewport).not_to_have_attribute("style", initial_view)
+        before_view = viewport.get_attribute("style")
+        box_select(["a", "a1", "b", "b1"], partial=True)
+        expect(page.get_by_text("已选 4 个节点")).to_be_visible()
+        expect(viewport).to_have_attribute("style", before_view)
+        for node_id in ("a", "a1", "b", "b1"):
+            expect(card(node_id)).to_have_class(re.compile(r"\bselected\b"))
+        expect(card("c")).not_to_have_class(re.compile(r"\bselected\b"))
+
+        label = card("a").get_by_role("button", name="a", exact=True)
+        start = label.bounding_box()
+        x, y = start["x"] + start["width"] / 2, start["y"] + start["height"] / 2
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 45, y + 22, steps=12)
+        page.mouse.up()
+        expect(page.get_by_text("已选 4 个节点")).to_be_visible()
+        _expect_saved(page)
+
+        moved = api.get(path).json()
+        moved_nodes = {node["id"]: node for node in moved["nodes"]}
+        dx = moved_nodes["a"]["positionX"] - 300
+        dy = moved_nodes["a"]["positionY"]
+        assert dx > 10 and dy > 5
+        for node_id, _, _, old_x, old_y in seed:
+            node = moved_nodes[node_id]
+            if node_id in {"a", "a1", "hidden", "b", "b1"}:
+                assert node["positionX"] - old_x == pytest.approx(dx)
+                assert node["positionY"] - old_y == pytest.approx(dy)
+            else:
+                assert (node["positionX"], node["positionY"]) == (old_x, old_y)
+        assert all(node["parentId"] == parent for node_id, parent, *_ in seed for node in [moved_nodes[node_id]])
+
+        pane = canvas.bounding_box()
+        x, y = pane["x"] + 35, pane["y"] + pane["height"] - 80
+        before_pan = viewport.get_attribute("style")
+        page.mouse.move(x, y)
+        page.mouse.down(button="right")
+        page.mouse.move(x + 35, y - 18, steps=8)
+        page.mouse.up(button="right")
+        expect(viewport).not_to_have_attribute("style", before_pan)
+        expect(page.get_by_text("已选 4 个节点")).to_be_visible()
+
+        page.get_by_role("button", name="删除选中").click()
+        dialog = page.get_by_role("dialog", name="删除分支")
+        expect(dialog).to_contain_text("共将删除 5 个节点")
+        dialog.get_by_role("button", name="取消").click()
+        expect(card("a")).to_be_visible()
+
+        label.click()
+        page.keyboard.press("Delete")
+        expect(dialog).to_contain_text("共将删除 5 个节点")
+        dialog.get_by_role("button", name="删除分支").click()
+        _expect_saved(page)
+        remaining = api.get(path).json()
+        assert {node["id"] for node in remaining["nodes"]} == {"root", "c", "c1"}
+        assert next(node for node in remaining["nodes"] if node["id"] == "c")["order"] == 0
+
+        page.reload()
+        expect(card("c1")).to_be_visible()
+        for node_id in ("root", "c", "c1"):
+            node = next(node for node in remaining["nodes"] if node["id"] == node_id)
+            assert card(node_id).count() == 1
+
+        box_select(["root", "c", "c1"])
+        expect(page.get_by_text("已选 3 个节点")).to_be_visible()
+        page.keyboard.press("Backspace")
+        expect(dialog).to_contain_text("共将删除 2 个节点")
+        dialog.get_by_role("button", name="删除分支").click()
+        _expect_saved(page)
+        assert [node["id"] for node in api.get(path).json()["nodes"]] == ["root"]
         browser.close()
