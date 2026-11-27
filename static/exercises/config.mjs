@@ -89,6 +89,6 @@ export const EXERCISES = [
     ],
     fallback: increase("tempoSeconds", 6),
     switchSeconds: 10,
-    restSeconds: 60,
+    restSeconds: 15,
   },
 ];

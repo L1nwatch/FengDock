@@ -1,10 +1,10 @@
-import { EXERCISES, GROUPS, POSITIONS } from "./config.mjs?v=7";
+import { EXERCISES, GROUPS, POSITIONS } from "./config.mjs?v=8";
 import { buildSteps } from "./guide.mjs?v=7";
 import { createGuideAudio } from "./audio.mjs?v=7";
 import {
   STORAGE_KEY, FEEDBACK_LABELS, migrateStore, schedule, saveTraining,
   undoFeedback, resumeExercise, updateResistance, eligibleStreak, canReplaceFeedback, replaceFeedback,
-} from "./training.mjs?v=7";
+} from "./training.mjs?v=8";
 
 const views = {
   home: document.getElementById("home-view"),

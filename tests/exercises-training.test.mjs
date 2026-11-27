@@ -384,5 +384,5 @@ test("biceps side changes last ten seconds independently of the rest between set
   const switches = steps.filter(({ phase }) => phase === "switch");
   assert.equal(switches.length, 2);
   assert.ok(switches.every(({ duration, countDown }) => duration === 10 && countDown));
-  assert.ok(steps.filter(({ phase }) => phase === "rest").every(({ duration }) => duration === 60));
+  assert.ok(steps.filter(({ phase }) => phase === "rest").every(({ duration }) => duration === 15));
 });
